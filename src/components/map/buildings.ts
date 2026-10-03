@@ -21,7 +21,7 @@ export const BUILDING_MAPS: CampusBuildingMap[] = [
     floors: { 1: MainFloor1, 2: MainFloor2, 3: MainFloor3 },
   },
   { id: 'iec', name: 'IEC', floors: {} },
-  { id: 'turkistan', name: 'Turkistan (МВЦ)', floors: {} },
+  { id: 'turkistan', name: 'Turkistan (EXPO)', floors: {} },
 ];
 
 export interface ParsedRoom {

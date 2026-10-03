@@ -12,10 +12,10 @@ export const FloatingActionButton: React.FC = () => {
   };
 
   return (
-    <div className="absolute bottom-16 right-4 z-30">
+    <div className="absolute bottom-16 right-4 z-30 flex flex-col items-end pointer-events-none">
       {/* Expanded Quick Menu */}
       {isOpen && (
-        <div className="mb-3 flex flex-col items-end gap-2 transition-all animate-in fade-in slide-in-from-bottom-3 duration-200">
+        <div className="mb-3 flex flex-col items-end gap-2 transition-all animate-in fade-in slide-in-from-bottom-3 duration-200 pointer-events-auto">
           <button
             onClick={() => handleAction(() => setIsAIAssistantOpen(true))}
             className="flex items-center gap-2 bg-indigo-600 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg hover:bg-indigo-700 active:scale-95 transition-all"
@@ -42,10 +42,10 @@ export const FloatingActionButton: React.FC = () => {
         </div>
       )}
 
-      {/* Main (+) Floating Action Button */}
+      {/* Main (+) Floating Action Button - firmly anchored to the right */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-12 h-12 rounded-full bg-[#10b981] hover:bg-[#059669] text-white shadow-lg shadow-emerald-500/30 flex items-center justify-center transition-all duration-200 active:scale-90 hover:scale-105"
+        className="w-12 h-12 rounded-full bg-[#10b981] hover:bg-[#059669] text-white shadow-lg shadow-emerald-500/30 flex items-center justify-center transition-all duration-200 active:scale-90 hover:scale-105 pointer-events-auto shrink-0 self-end"
         title="Quick Actions"
         aria-label="Add or Quick Actions"
       >

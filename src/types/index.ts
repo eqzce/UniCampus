@@ -1,6 +1,8 @@
-export type TabType = 'dashboard' | 'schedule' | 'assignments' | 'map';
+export type TabType = 'dashboard' | 'schedule' | 'grades' | 'assignments' | 'map';
 
 export type AssignmentStatus = 'todo' | 'submitted' | 'graded';
+
+export type AssessmentCategory = 'assignment' | 'quiz' | 'midterm' | 'final';
 
 export interface ScheduleItem {
   id: string;
@@ -18,18 +20,23 @@ export interface ScheduleItem {
   isCurrent?: boolean;
 }
 
-export interface Assignment {
+export interface AssessmentItem {
   id: string;
   title: string;
+  category: AssessmentCategory; // 'assignment' | 'quiz' | 'midterm' | 'final'
   courseCode: string;
   courseName: string;
-  dueDate: string; // e.g. "Oct 26" or "Due 26"
+  dueDate: string; // e.g. "Due Oct 26"
+  dueFormatted: string; // e.g. "Oct 26, 23:59"
   daysLeft?: number;
   status: AssignmentStatus;
-  grade?: string;
+  weight?: string; // e.g. "15%"
+  grade?: string; // e.g. "95/100"
   hasPersonalNote?: boolean;
   personalNote?: string;
 }
+
+export type Assignment = AssessmentItem;
 
 export interface Announcement {
   id: string;

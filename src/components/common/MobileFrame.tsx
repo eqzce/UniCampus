@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { DashboardScreen } from '../dashboard/DashboardScreen';
 import { ScheduleScreen } from '../schedule/ScheduleScreen';
-import { AssignmentsScreen } from '../assignments/AssignmentsScreen';
+import { GradesScreen } from '../grades/GradesScreen';
 import { CampusMapScreen } from '../map/CampusMapScreen';
 import { BottomNav } from './BottomNav';
 import { Wifi, Battery, Signal } from 'lucide-react';
@@ -16,8 +16,9 @@ export const MobileFrame: React.FC = () => {
         return <DashboardScreen />;
       case 'schedule':
         return <ScheduleScreen />;
+      case 'grades':
       case 'assignments':
-        return <AssignmentsScreen />;
+        return <GradesScreen />;
       case 'map':
         return <CampusMapScreen />;
       default:

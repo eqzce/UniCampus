@@ -99,7 +99,7 @@ export const CampusMapScreen: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-[#f4f6fa] relative overflow-hidden select-none">
-      <Header title="CAMPUS MAP" subtitle={building.name} />
+      <Header title="MAP" subtitle={building.name} />
 
       {/* Search + building switcher */}
       <div className="px-3 pt-3 pb-2 flex items-center gap-2 z-20">
@@ -107,7 +107,7 @@ export const CampusMapScreen: React.FC = () => {
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Поиск кабинета, напр. 105"
+            placeholder="Search room, e.g. 105"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
             disabled={floorNumbers.length === 0}
@@ -130,7 +130,7 @@ export const CampusMapScreen: React.FC = () => {
             className="flex items-center gap-1 bg-[#18458b] text-white text-[11px] font-semibold pl-2.5 pr-2 py-2 rounded-full shadow-sm hover:bg-[#14366d] transition-colors"
           >
             <Building2 className="w-3.5 h-3.5" />
-            <span>Другие кампусы</span>
+            <span>Other Campuses</span>
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isBuildingMenuOpen ? 'rotate-180' : ''}`} />
           </button>
 
@@ -164,11 +164,13 @@ export const CampusMapScreen: React.FC = () => {
           >
             <TransformWrapper
               ref={zoomRef}
-              initialScale={1.2}
-              minScale={0.5}
-              maxScale={6}
+              initialScale={1.15}
+              minScale={0.7}
+              maxScale={4}
               centerOnInit
-              limitToBounds={false}
+              centerZoomedOut
+              limitToBounds={true}
+              disablePadding={true}
               smooth={true}
               panning={{
                 velocityDisabled: true,
@@ -194,11 +196,11 @@ export const CampusMapScreen: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '140px 180px',
+                  padding: '60px 80px',
                   boxSizing: 'content-box',
                 }}
               >
-                <div className="w-[960px] max-w-none flex items-center justify-center p-4">
+                <div className="w-[920px] max-w-none flex items-center justify-center p-2">
                   <FloorPlan />
                 </div>
               </TransformComponent>
@@ -209,7 +211,7 @@ export const CampusMapScreen: React.FC = () => {
             <div className="bg-white rounded-2xl p-5 text-center border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)]">
               <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm font-bold text-slate-800">{building.name}</p>
-              <p className="text-xs text-slate-400 mt-1">Карта этого кампуса пока отсутствует.</p>
+              <p className="text-xs text-slate-400 mt-1">Map of this campus is not available yet.</p>
             </div>
           </div>
         )}
@@ -225,7 +227,7 @@ export const CampusMapScreen: React.FC = () => {
                   className={`w-9 h-9 text-xs font-bold transition-colors ${
                     f === floor ? 'bg-[#18458b] text-white' : 'text-slate-600 hover:bg-slate-50'
                   }`}
-                  title={`Этаж ${f}`}
+                  title={`Floor ${f}`}
                 >
                   F{f}
                 </button>
@@ -236,7 +238,7 @@ export const CampusMapScreen: React.FC = () => {
               <button
                 onClick={() => zoomRef.current?.zoomIn()}
                 className="w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-slate-50"
-                title="Увеличить"
+                title="Zoom in"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -244,7 +246,7 @@ export const CampusMapScreen: React.FC = () => {
               <button
                 onClick={() => zoomRef.current?.zoomOut()}
                 className="w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-slate-50"
-                title="Уменьшить"
+                title="Zoom out"
               >
                 <Minus className="w-4 h-4" />
               </button>
@@ -264,15 +266,15 @@ export const CampusMapScreen: React.FC = () => {
                   <h5 className="text-sm font-bold text-slate-900 leading-tight">{selectedRoom.label}</h5>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     {building.name}
-                    {selectedRoom.block && ` · Блок ${selectedRoom.block}`}
-                    {` · Этаж ${selectedRoom.floor ?? floor}`}
+                    {selectedRoom.block && ` · Block ${selectedRoom.block}`}
+                    {` · Floor ${selectedRoom.floor ?? floor}`}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedRoom(null)}
                 className="text-slate-400 hover:text-slate-600 p-0.5"
-                aria-label="Закрыть"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>

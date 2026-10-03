@@ -1,7 +1,7 @@
 import React from 'react';
 import { DashboardScreen } from '../dashboard/DashboardScreen';
 import { ScheduleScreen } from '../schedule/ScheduleScreen';
-import { AssignmentsScreen } from '../assignments/AssignmentsScreen';
+import { GradesScreen } from '../grades/GradesScreen';
 import { CampusMapScreen } from '../map/CampusMapScreen';
 import { BottomNav } from '../common/BottomNav';
 
@@ -43,20 +43,20 @@ export const AllScreensView: React.FC = () => {
           </div>
         </div>
 
-        {/* Screen 3: ASSIGNMENTS */}
+        {/* Screen 3: GRADES */}
         <div className="w-[340px] h-[680px] bg-white rounded-[40px] shadow-[0_20px_50px_rgba(24,69,139,0.15)] border-8 border-slate-900/90 overflow-hidden flex flex-col relative ring-1 ring-slate-900/10">
           <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-4 bg-slate-900 rounded-full z-40"></div>
           
           <div className="flex-1 overflow-hidden flex flex-col pt-3">
-            <AssignmentsScreen />
+            <GradesScreen />
           </div>
-          <BottomNav forcedTab="assignments" />
+          <BottomNav forcedTab="grades" />
           <div className="h-4 bg-white flex items-center justify-center">
             <div className="w-28 h-1 bg-slate-300 rounded-full"></div>
           </div>
         </div>
 
-        {/* Screen 4: CAMPUS MAP */}
+        {/* Screen 4: MAP */}
         <div className="w-[340px] h-[680px] bg-white rounded-[40px] shadow-[0_20px_50px_rgba(24,69,139,0.15)] border-8 border-slate-900/90 overflow-hidden flex flex-col relative ring-1 ring-slate-900/10">
           <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-4 bg-slate-900 rounded-full z-40"></div>
           

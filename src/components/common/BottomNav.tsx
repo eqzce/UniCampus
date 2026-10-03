@@ -1,5 +1,5 @@
 import React from 'react';
-import { Gauge, Calendar, ClipboardCheck, MapPin } from 'lucide-react';
+import { Gauge, Calendar, GraduationCap, MapPin } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { TabType } from '../../types';
 
@@ -32,9 +32,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({ forcedTab, onTabChange }) 
       icon: Calendar,
     },
     {
-      id: 'assignments' as TabType,
-      label: 'Assignments',
-      icon: ClipboardCheck,
+      id: 'grades' as TabType,
+      label: 'Grades',
+      icon: GraduationCap,
     },
     {
       id: 'map' as TabType,
@@ -47,7 +47,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({ forcedTab, onTabChange }) 
     <nav className="bg-white border-t border-slate-100 py-2 px-3 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] z-20">
       <div className="flex items-center justify-around">
         {navItems.map((item) => {
-          const isActive = currentTab === item.id;
+          const isActive =
+            currentTab === item.id ||
+            (item.id === 'grades' && (currentTab as string) === 'assignments');
           const Icon = item.icon;
 
           return (
@@ -66,9 +68,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ forcedTab, onTabChange }) 
                     isActive ? 'stroke-[2.4]' : 'stroke-[1.8]'
                   }`}
                 />
-                {isActive && (
-                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[#18458b] rounded-full"></span>
-                )}
               </div>
               <span className="text-[11px] mt-1 tracking-tight">{item.label}</span>
             </button>

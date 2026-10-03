@@ -16,6 +16,8 @@ interface AppContextType {
   setViewMode: (mode: ViewLayoutMode) => void;
 
   // Modals
+  isProfileOpen: boolean;
+  setIsProfileOpen: (open: boolean) => void;
   isNotificationsOpen: boolean;
   setIsNotificationsOpen: (open: boolean) => void;
   isAIAssistantOpen: boolean;
@@ -29,6 +31,8 @@ interface AppContextType {
   assignments: Assignment[];
   assignmentFilter: 'all' | AssignmentStatus;
   setAssignmentFilter: (filter: 'all' | AssignmentStatus) => void;
+  selectedCourseFilter: string; // 'all' or course code e.g. 'PHYS101'
+  setSelectedCourseFilter: (code: string) => void;
   toggleAssignmentStatus: (id: string) => void;
   addPersonalNote: (id: string, note: string) => void;
 
@@ -46,15 +50,20 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     const tab = new URLSearchParams(window.location.search).get('tab');
-    return (['dashboard', 'schedule', 'assignments', 'map'] as TabType[]).includes(tab as TabType)
+    return (['dashboard', 'schedule', 'grades', 'assignments', 'map'] as TabType[]).includes(tab as TabType)
       ? (tab as TabType)
       : 'dashboard';
   });
   const [selectedRoomForNav, setSelectedRoomForNav] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('room')
   );
-  const [viewMode, setViewMode] = useState<ViewLayoutMode>('phone');
+  const [viewMode, setViewMode] = useState<ViewLayoutMode>(
+    () => (new URLSearchParams(window.location.search).get('view') as ViewLayoutMode) || 'phone'
+  );
 
+  const [isProfileOpen, setIsProfileOpen] = useState(
+    () => new URLSearchParams(window.location.search).get('profile') === '1'
+  );
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
@@ -62,6 +71,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [assignments, setAssignments] = useState<Assignment[]>(ASSIGNMENTS_LIST);
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | AssignmentStatus>('all');
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('all');
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   const unreadAnnouncementsCount = RECENT_ANNOUNCEMENTS.filter((a) => a.unread).length;
@@ -108,6 +118,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearRoomNavigation,
         viewMode,
         setViewMode,
+        isProfileOpen,
+        setIsProfileOpen,
         isNotificationsOpen,
         setIsNotificationsOpen,
         isAIAssistantOpen,
@@ -119,6 +131,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         assignments,
         assignmentFilter,
         setAssignmentFilter,
+        selectedCourseFilter,
+        setSelectedCourseFilter,
         toggleAssignmentStatus,
         addPersonalNote,
         isOfflineMode,

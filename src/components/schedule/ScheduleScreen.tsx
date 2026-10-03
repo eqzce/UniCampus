@@ -131,30 +131,27 @@ export const ScheduleScreen: React.FC = () => {
                           <button
                             key={item.id}
                             onClick={() => setSelectedClass(item)}
-                            className={`w-full rounded-md p-1 text-left transition-all border ${getColorClasses(
+                            className={`w-full min-h-[46px] rounded-md p-1 text-left transition-all border flex flex-col justify-start ${getColorClasses(
                               item.color
                             )} ${
                               isSelected
                                 ? 'ring-2 ring-[#18458b] shadow-sm font-semibold scale-[1.02] z-10'
                                 : 'opacity-90 hover:opacity-100'
                             }`}
-                            style={{
-                              minHeight: `${item.durationHours * 34}px`,
-                            }}
                           >
                             {item.isCurrent && (
-                              <div className="text-[8px] font-black text-emerald-700 uppercase tracking-tighter mb-0.5 leading-none">
+                              <div className="text-[7.5px] font-black text-emerald-800 uppercase tracking-tighter mb-0.5 leading-tight">
                                 Current Class
                               </div>
                             )}
                             <div className="text-[9px] font-bold leading-tight truncate">
                               {item.startTime}
                             </div>
-                            <div className="text-[9px] font-semibold leading-tight truncate">
+                            <div className="text-[9px] font-semibold leading-tight break-words">
                               {item.courseName}
                             </div>
                             {item.room && (
-                              <div className="text-[8px] opacity-80 leading-none truncate mt-0.5">
+                              <div className="text-[8px] opacity-80 leading-none truncate mt-auto pt-0.5">
                                 {item.room.replace('Room ', '')}
                               </div>
                             )}

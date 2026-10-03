@@ -4,12 +4,13 @@ import { MobileFrame } from './components/common/MobileFrame';
 import { AllScreensView } from './components/presentation/AllScreensView';
 import { DashboardScreen } from './components/dashboard/DashboardScreen';
 import { ScheduleScreen } from './components/schedule/ScheduleScreen';
-import { AssignmentsScreen } from './components/assignments/AssignmentsScreen';
+import { GradesScreen } from './components/grades/GradesScreen';
 import { CampusMapScreen } from './components/map/CampusMapScreen';
 import { BottomNav } from './components/common/BottomNav';
 import { AIAssistantModal } from './components/ai/AIAssistantModal';
 import { RoomBookingModal } from './components/booking/RoomBookingModal';
 import { NotificationsModal } from './components/notifications/NotificationsModal';
+import { ProfileModal } from './components/profile/ProfileModal';
 import {
   Smartphone,
   LayoutGrid,
@@ -39,8 +40,9 @@ const MainContent: React.FC = () => {
         return <DashboardScreen />;
       case 'schedule':
         return <ScheduleScreen />;
+      case 'grades':
       case 'assignments':
-        return <AssignmentsScreen />;
+        return <GradesScreen />;
       case 'map':
         return <CampusMapScreen />;
       default:
@@ -164,6 +166,7 @@ const MainContent: React.FC = () => {
       </main>
 
       {/* Modals & Dialogs */}
+      <ProfileModal />
       <AIAssistantModal />
       <RoomBookingModal />
       <NotificationsModal />

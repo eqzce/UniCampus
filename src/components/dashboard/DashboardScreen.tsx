@@ -10,8 +10,8 @@ export const DashboardScreen: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-[#f4f6fa] relative overflow-hidden select-none">
-      {/* Header with Welcome greeting */}
-      <Header title="DASHBOARD" showGreeting={true} />
+      {/* Header */}
+      <Header title="DASHBOARD" />
 
       {/* Scrollable Content Container */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3.5 pb-20">

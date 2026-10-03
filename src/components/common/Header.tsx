@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 interface HeaderProps {
@@ -8,19 +8,29 @@ interface HeaderProps {
   showGreeting?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ title, subtitle, showGreeting }) => {
-  const { student, unreadAnnouncementsCount, setIsNotificationsOpen } = useApp();
+export const Header: React.FC<HeaderProps> = ({ title, subtitle }) => {
+  const { unreadAnnouncementsCount, setIsNotificationsOpen, setIsProfileOpen } = useApp();
 
   return (
-    <header className="bg-[#18458b] text-white pt-4 pb-5 px-5 rounded-b-[28px] shadow-md relative z-10 transition-all">
-      {/* Top Bar with Title and Notification Bell */}
-      <div className="flex items-center justify-between relative mb-2">
-        <div className="w-8"></div> {/* spacer for centering */}
+    <header className="bg-[#18458b] text-white pt-4 pb-4 px-4 rounded-b-[28px] shadow-md relative z-10 transition-all">
+      {/* Top Bar with Profile Button (Left), Title (Center), and Notification Bell (Right) */}
+      <div className="flex items-center justify-between relative">
+        {/* Profile Button - Request 7: Top Left in all tabs */}
+        <button
+          onClick={() => setIsProfileOpen(true)}
+          className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 border border-white/20 flex items-center justify-center text-white transition-all shadow-2xs group"
+          title="Student Profile"
+          aria-label="Open student profile"
+        >
+          <User className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+        </button>
         
-        <h1 className="text-[17px] font-bold tracking-wider text-center uppercase text-white/95">
+        {/* Centered Title */}
+        <h1 className="text-[17px] font-bold tracking-wider text-center uppercase text-white/95 truncate px-2">
           {title}
         </h1>
 
+        {/* Notifications Bell */}
         <button
           onClick={() => setIsNotificationsOpen(true)}
           className="relative w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/15 active:scale-95 transition-all text-white/90"
@@ -36,19 +46,7 @@ export const Header: React.FC<HeaderProps> = ({ title, subtitle, showGreeting })
         </button>
       </div>
 
-      {/* Optional Greeting (as seen on Dashboard: "Welcome, Arystan!") */}
-      {showGreeting && (
-        <div className="mt-3 mb-1">
-          <h2 className="text-xl font-bold tracking-tight text-white">
-            Welcome, {student.name}!
-          </h2>
-          <p className="text-blue-100/75 text-xs">
-            {student.major} • GPA: {student.gpa}
-          </p>
-        </div>
-      )}
-
-      {subtitle && !showGreeting && (
+      {subtitle && (
         <p className="text-blue-100/80 text-xs text-center mt-1">
           {subtitle}
         </p>
