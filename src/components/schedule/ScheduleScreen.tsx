@@ -8,11 +8,11 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  MapPin,
   X,
   ChevronUp,
   ChevronDown,
   Clock,
+  ArrowRight,
   BookOpen,
 } from 'lucide-react';
 
@@ -20,10 +20,10 @@ const HOURS = ['09:00', '10:00', '11:00', '12:00', '1:00', '2:00', '3:00', '4:00
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 
 export const ScheduleScreen: React.FC = () => {
-  const { navigateToClassroom, assignments } = useApp();
+  const { navigateToClassroom, assignments, setActiveTab, setSelectedCourseFilter } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Requirement: Appears ONLY when clicked, initially null (unless specified in query for direct test)
+  // Requirement: Appears ONLY when clicked, initially null (supports ?class= for testing)
   const [selectedClass, setSelectedClass] = useState<ScheduleItem | null>(() => {
     const classId = new URLSearchParams(window.location.search).get('class');
     if (classId) return WEEKLY_SCHEDULE.find((it) => it.id === classId) || null;
@@ -34,6 +34,9 @@ export const ScheduleScreen: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return new URLSearchParams(window.location.search).get('collapsed') === '1';
   });
+
+  // State to toggle additional deadlines ("Show more")
+  const [showMoreDeadlines, setShowMoreDeadlines] = useState(false);
 
   // Filter schedule based on search query
   const filteredSchedule = WEEKLY_SCHEDULE.filter((item) => {
@@ -47,29 +50,29 @@ export const ScheduleScreen: React.FC = () => {
     );
   });
 
-  // Find course-specific deadlines (assignment, quiz, midterm, session)
+  // Find course-specific deadlines sorted by urgency
   const classDeadlines = useMemo(() => {
     if (!selectedClass) return [];
     const baseCode = selectedClass.courseCode.split('-')[0].toLowerCase();
     const courseName = selectedClass.courseName.toLowerCase();
 
-    return assignments.filter((asg) => {
-      const asgCode = asg.courseCode.toLowerCase();
-      const asgName = asg.courseName.toLowerCase();
-      return (
-        asgCode.includes(baseCode) ||
-        baseCode.includes(asgCode) ||
-        asgName.includes(courseName) ||
-        courseName.includes(asgName)
-      );
-    });
+    return assignments
+      .filter((asg) => {
+        const asgCode = asg.courseCode.toLowerCase();
+        const asgName = asg.courseName.toLowerCase();
+        return (
+          asgCode.includes(baseCode) ||
+          baseCode.includes(asgCode) ||
+          asgName.includes(courseName) ||
+          courseName.includes(asgName)
+        );
+      })
+      .sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
   }, [selectedClass, assignments]);
 
-  // Nearest deadline for collapsed view
-  const nearestDeadline = useMemo(() => {
-    if (classDeadlines.length === 0) return null;
-    return [...classDeadlines].sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999))[0];
-  }, [classDeadlines]);
+  // Primary deadline (today's / nearest deadline)
+  const primaryDeadline = classDeadlines[0] || null;
+  const additionalDeadlines = classDeadlines.slice(1);
 
   // Color mapping matching image mockup palette
   const getColorClasses = (color: ScheduleItem['color']) => {
@@ -109,6 +112,7 @@ export const ScheduleScreen: React.FC = () => {
   const handleClassClick = (item: ScheduleItem) => {
     setSelectedClass(item);
     setIsCollapsed(false);
+    setShowMoreDeadlines(false);
   };
 
   return (
@@ -117,8 +121,11 @@ export const ScheduleScreen: React.FC = () => {
       <Header title="SCHEDULE" />
 
       {/* Main Content Area: Timetable Grid */}
-      <div className={`flex-1 overflow-y-auto px-3.5 py-3 space-y-3 ${selectedClass ? (isCollapsed ? 'pb-20' : 'pb-80') : 'pb-20'}`}>
-        
+      <div
+        className={`flex-1 overflow-y-auto px-3.5 py-3 space-y-3 ${
+          selectedClass ? (isCollapsed ? 'pb-20' : 'pb-60') : 'pb-20'
+        }`}
+      >
         {/* Search bar */}
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -202,7 +209,6 @@ export const ScheduleScreen: React.FC = () => {
                                 : 'opacity-90 hover:opacity-100'
                             }`}
                           >
-                            {/* Requirement: NO 'CURRENT CLASS' badge anywhere! */}
                             <div className="text-[9px] font-bold leading-tight truncate">
                               {item.startTime}
                             </div>
@@ -228,14 +234,14 @@ export const ScheduleScreen: React.FC = () => {
 
       </div>
 
-      {/* Requirement: Docked to main interface (fixed bottom), collapsible and closeable! */}
+      {/* Requirement: Compact, non-overloaded docked panel */}
       {selectedClass && (
         <div
           className={`absolute bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200/90 shadow-[0_-10px_25px_rgba(0,0,0,0.12)] rounded-t-3xl transition-all duration-200 animate-in slide-in-from-bottom flex flex-col ${
-            isCollapsed ? 'max-h-[60px]' : 'max-h-[82%]'
+            isCollapsed ? 'max-h-[56px]' : 'max-h-[75%]'
           }`}
         >
-          {/* Top Header Handle & Controls Bar */}
+          {/* Top Header Bar */}
           <div
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="px-4 py-2.5 flex items-center justify-between cursor-pointer border-b border-slate-100 select-none bg-slate-50/70 rounded-t-3xl"
@@ -245,11 +251,11 @@ export const ScheduleScreen: React.FC = () => {
                 Selected Class
               </span>
               <span className="text-xs font-bold text-slate-800 truncate">
-                {selectedClass.startTime} - {selectedClass.courseName}
+                {selectedClass.courseName}
               </span>
-              {isCollapsed && nearestDeadline && (
-                <span className="hidden sm:inline-block text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md truncate">
-                  {nearestDeadline.title} ({nearestDeadline.daysLeft === 0 ? 'Today' : `${nearestDeadline.daysLeft}d`})
+              {isCollapsed && primaryDeadline && (
+                <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md truncate ml-1">
+                  {primaryDeadline.title} ({primaryDeadline.daysLeft === 0 ? 'Today' : `${primaryDeadline.daysLeft}d`})
                 </span>
               )}
             </div>
@@ -280,115 +286,143 @@ export const ScheduleScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* Expanded Content Body */}
+          {/* Clean, Non-overloaded Content Body */}
           {!isCollapsed && (
-            <div className="p-4 overflow-y-auto space-y-3.5">
+            <div className="p-3.5 overflow-y-auto space-y-3">
               
-              {/* Classroom & Instructor Details */}
-              <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 leading-tight">
-                      {selectedClass.courseName}
-                    </h4>
-                    <p className="text-xs text-slate-600 mt-1 flex items-center gap-1">
-                      <span className="text-slate-400">Classroom:</span>
-                      <span className="font-bold text-[#18458b] bg-white px-2 py-0.5 rounded-md border border-slate-200/70">
-                        {selectedClass.room}
-                      </span>
-                      <span className="text-slate-500">({selectedClass.building})</span>
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Instructor: <span className="font-medium text-slate-700">{selectedClass.professor}</span>
-                    </p>
-                  </div>
+              {/* Classroom & Instructor Row */}
+              <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                {/* Clickable Blue Classroom Button with Arrow redirecting to Map */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-slate-400 font-medium">Classroom:</span>
+                  <button
+                    onClick={() => navigateToClassroom(selectedClass.room)}
+                    className="inline-flex items-center gap-1 bg-[#18458b] hover:bg-[#14366d] active:scale-95 text-white font-bold text-xs px-2.5 py-1 rounded-lg shadow-xs transition-all cursor-pointer group"
+                    title="Open on map"
+                  >
+                    <span>{selectedClass.room}</span>
+                    <ArrowRight className="w-3.5 h-3.5 stroke-[2.5] group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                  <span className="text-slate-500 font-normal">({selectedClass.building})</span>
+                </div>
 
-                  <span className="text-xs font-bold text-slate-700 bg-white px-2 py-1 rounded-lg border border-slate-200/70 shadow-2xs">
-                    {selectedClass.day} · {selectedClass.startTime} - {selectedClass.endTime}
-                  </span>
+                <div className="text-[11px] text-slate-500">
+                  Instructor: <span className="font-medium text-slate-700">{selectedClass.professor}</span>
                 </div>
               </div>
 
-              {/* Requirement: Deadlines Information (assignment, quiz, midterm, session) */}
-              <div>
-                <div className="flex items-center justify-between mb-2 px-0.5">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    <Clock className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Course Deadlines ({classDeadlines.length})</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">
-                    Assignments · Quizzes · Midterms · Finals
-                  </span>
+              {/* Requirement: Only this day's / nearest deadline + 'Show more' button */}
+              <div className="pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Upcoming Deadline</span>
                 </div>
 
-                {classDeadlines.length > 0 ? (
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
-                    {classDeadlines.map((dl) => {
-                      const cat = getCategoryBadge(dl.category);
-                      return (
-                        <div
-                          key={dl.id}
-                          className="flex items-center justify-between bg-white hover:bg-blue-50/40 rounded-xl p-2.5 border border-slate-200/80 shadow-2xs transition-colors"
+                {primaryDeadline ? (
+                  <div className="space-y-2">
+                    {/* Primary deadline card */}
+                    <div className="flex items-center justify-between bg-slate-50 hover:bg-blue-50/40 rounded-xl p-2.5 border border-slate-200/80 transition-colors">
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        <span
+                          className={`text-[9.5px] px-2 py-0.5 rounded-full border shrink-0 ${
+                            getCategoryBadge(primaryDeadline.category).classes
+                          }`}
                         >
-                          <div className="flex items-center gap-2 min-w-0 pr-2">
-                            <span
-                              className={`text-[9.5px] px-2 py-0.5 rounded-full border shrink-0 ${cat.classes}`}
-                            >
-                              {cat.label}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-slate-900 text-xs truncate">
-                                {dl.title}
-                              </p>
-                              <p className="text-[10px] text-slate-400 truncate">
-                                {dl.dueFormatted || dl.dueDate}
-                                {dl.weight && ` · Weight: ${dl.weight}`}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="text-right shrink-0">
-                            <span
-                              className={`text-[11px] font-bold ${
-                                dl.daysLeft === 0
-                                  ? 'text-amber-600'
-                                  : dl.daysLeft === 1
-                                  ? 'text-emerald-600'
-                                  : dl.daysLeft !== undefined && dl.daysLeft < 7
-                                  ? 'text-blue-700'
-                                  : 'text-slate-600'
-                              }`}
-                            >
-                              {dl.daysLeft === 0
-                                ? 'Today'
-                                : dl.daysLeft === 1
-                                ? 'Tomorrow'
-                                : dl.daysLeft !== undefined
-                                ? `${dl.daysLeft}d left`
-                                : dl.dueDate}
-                            </span>
-                          </div>
+                          {getCategoryBadge(primaryDeadline.category).label}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 text-xs truncate">
+                            {primaryDeadline.title}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {primaryDeadline.dueFormatted || primaryDeadline.dueDate}
+                            {primaryDeadline.weight && ` · Weight: ${primaryDeadline.weight}`}
+                          </p>
                         </div>
-                      );
-                    })}
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`text-[11px] font-bold ${
+                            primaryDeadline.daysLeft === 0
+                              ? 'text-amber-600'
+                              : primaryDeadline.daysLeft === 1
+                              ? 'text-emerald-600'
+                              : 'text-blue-700'
+                          }`}
+                        >
+                          {primaryDeadline.daysLeft === 0
+                            ? 'Today'
+                            : primaryDeadline.daysLeft === 1
+                            ? 'Tomorrow'
+                            : `${primaryDeadline.daysLeft}d left`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Show more toggle button */}
+                    {additionalDeadlines.length > 0 && !showMoreDeadlines && (
+                      <button
+                        onClick={() => setShowMoreDeadlines(true)}
+                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 py-0.5 cursor-pointer transition-colors"
+                      >
+                        <span>Show more ({additionalDeadlines.length} more)</span>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {/* Expanded additional deadlines */}
+                    {showMoreDeadlines && (
+                      <div className="space-y-1.5 pt-1 animate-in fade-in duration-150">
+                        {additionalDeadlines.map((dl) => {
+                          const cat = getCategoryBadge(dl.category);
+                          return (
+                            <div
+                              key={dl.id}
+                              className="flex items-center justify-between bg-white rounded-xl p-2 border border-slate-200/70 shadow-2xs text-xs"
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full border shrink-0 ${cat.classes}`}>
+                                  {cat.label}
+                                </span>
+                                <span className="font-medium text-slate-800 text-[11px] truncate">
+                                  {dl.title}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-semibold shrink-0">
+                                {dl.dueDate}
+                              </span>
+                            </div>
+                          );
+                        })}
+
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            onClick={() => setShowMoreDeadlines(false)}
+                            className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>Show less</span>
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setActiveTab('grades');
+                              setSelectedCourseFilter(selectedClass.courseCode.split('-')[0]);
+                            }}
+                            className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>Open in Grades →</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100 text-xs text-slate-400">
-                    <BookOpen className="w-4 h-4 mx-auto mb-1 text-slate-300" />
-                    No upcoming deadlines scheduled for this course
+                  <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100 text-xs text-slate-400">
+                    <BookOpen className="w-3.5 h-3.5 mx-auto mb-1 text-slate-300" />
+                    No upcoming deadlines for this course
                   </div>
                 )}
-              </div>
-
-              {/* Action Buttons: Show on Map */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
-                <button
-                  onClick={() => navigateToClassroom(selectedClass.room)}
-                  className="w-full bg-[#18458b] hover:bg-[#14366d] active:scale-98 text-white text-xs font-bold py-2.5 px-6 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all"
-                >
-                  <MapPin className="w-4 h-4 text-sky-300" />
-                  <span>Show on Map</span>
-                </button>
               </div>
 
             </div>
