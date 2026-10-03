@@ -30,7 +30,7 @@ export const MapEngine = {
     userLocation: Point2D,
     destinationRoom: string
   ): NavigationRoute {
-    // Default placeholder route coordinates for Room 301 (Science Building)
+    // Default placeholder route coordinates for Room 320 (Science Building)
     return {
       startPoint: userLocation,
       destinationRoom,
