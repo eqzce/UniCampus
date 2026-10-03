@@ -44,8 +44,15 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  const [selectedRoomForNav, setSelectedRoomForNav] = useState<string | null>('Room 301');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    return (['dashboard', 'schedule', 'assignments', 'map'] as TabType[]).includes(tab as TabType)
+      ? (tab as TabType)
+      : 'dashboard';
+  });
+  const [selectedRoomForNav, setSelectedRoomForNav] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('room')
+  );
   const [viewMode, setViewMode] = useState<ViewLayoutMode>('phone');
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
