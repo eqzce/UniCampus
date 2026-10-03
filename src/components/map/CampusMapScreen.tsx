@@ -130,12 +130,12 @@ export const CampusMapScreen: React.FC = () => {
             className="flex items-center gap-1 bg-[#18458b] text-white text-[11px] font-semibold pl-2.5 pr-2 py-2 rounded-full shadow-sm hover:bg-[#14366d] transition-colors"
           >
             <Building2 className="w-3.5 h-3.5" />
-            <span>Другие корпусы</span>
+            <span>Другие кампусы</span>
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isBuildingMenuOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {isBuildingMenuOpen && (
-            <div className="absolute right-0 mt-1.5 w-40 bg-white rounded-xl shadow-lg border border-slate-100 p-1 z-40">
+            <div className="absolute right-0 mt-1.5 w-44 bg-white rounded-xl shadow-lg border border-slate-100 p-1 z-40">
               {BUILDING_MAPS.map((b) => (
                 <button
                   key={b.id}
@@ -164,17 +164,43 @@ export const CampusMapScreen: React.FC = () => {
           >
             <TransformWrapper
               ref={zoomRef}
-              initialScale={1.3}
-              minScale={0.8}
-              maxScale={8}
+              initialScale={1.2}
+              minScale={0.5}
+              maxScale={6}
               centerOnInit
-              doubleClick={{ disabled: true }}
+              limitToBounds={false}
+              smooth={true}
+              panning={{
+                velocityDisabled: true,
+              }}
+              velocityAnimation={{
+                disabled: true,
+              }}
+              pinch={{
+                step: 4,
+              }}
+              wheel={{
+                step: 0.08,
+              }}
+              doubleClick={{
+                disabled: true,
+              }}
             >
               <TransformComponent
-                wrapperStyle={{ width: '100%', height: '100%' }}
-                contentStyle={{ width: '100%', height: '100%' }}
+                wrapperStyle={{ width: '100%', height: '100%', overflow: 'hidden' }}
+                contentStyle={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '140px 180px',
+                  boxSizing: 'content-box',
+                }}
               >
-                <FloorPlan />
+                <div className="w-[960px] max-w-none flex items-center justify-center p-4">
+                  <FloorPlan />
+                </div>
               </TransformComponent>
             </TransformWrapper>
           </div>
@@ -183,7 +209,7 @@ export const CampusMapScreen: React.FC = () => {
             <div className="bg-white rounded-2xl p-5 text-center border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)]">
               <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm font-bold text-slate-800">{building.name}</p>
-              <p className="text-xs text-slate-400 mt-1">Карта этого корпуса пока отсутствует.</p>
+              <p className="text-xs text-slate-400 mt-1">Карта этого кампуса пока отсутствует.</p>
             </div>
           </div>
         )}

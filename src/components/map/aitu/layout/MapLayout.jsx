@@ -31,7 +31,7 @@ const MapLayout = ({ children }) => {
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 924.69 396.16"
       preserveAspectRatio="xMidYMid meet"
-      style={{ display: "block" }}
+      style={{ display: "block", overflow: "visible" }}
     >
       <defs>
         <style>

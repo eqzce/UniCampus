@@ -17,7 +17,7 @@ export interface CampusBuildingMap {
 export const BUILDING_MAPS: CampusBuildingMap[] = [
   {
     id: 'main',
-    name: 'Main Corpus',
+    name: 'Main Campus',
     floors: { 1: MainFloor1, 2: MainFloor2, 3: MainFloor3 },
   },
   { id: 'iec', name: 'IEC', floors: {} },
