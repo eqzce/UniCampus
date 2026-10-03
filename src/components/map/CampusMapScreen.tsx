@@ -12,7 +12,7 @@ const SEARCH_CLASS = 'room-map-group-search-target';
 const SELECTED_CLASS = 'room-map-group-selected';
 
 export const CampusMapScreen: React.FC = () => {
-  const { selectedRoomForNav } = useApp();
+  const { selectedRoomForNav, roomNavTimestamp } = useApp();
 
   const initialRoom = useMemo(() => {
     if (!selectedRoomForNav) return null;
@@ -45,8 +45,13 @@ export const CampusMapScreen: React.FC = () => {
     setBuildingId('main');
     setQuery(parsed.id);
     setSelectedRoom(parsed);
-    if (parsed.floor) setFloor(parsed.floor);
-  }, [selectedRoomForNav]);
+    if (parsed.floor) {
+      setFloor(parsed.floor);
+    }
+    setTimeout(() => {
+      zoomRef.current?.resetTransform();
+    }, 60);
+  }, [selectedRoomForNav, roomNavTimestamp]);
 
   // Typing a room number jumps to its floor
   const handleQueryChange = (value: string) => {
@@ -61,10 +66,17 @@ export const CampusMapScreen: React.FC = () => {
     const root = mapRef.current;
     if (!root) return;
     const q = query.trim().toUpperCase();
+    const selId = selectedRoom?.id.toUpperCase();
     root.querySelectorAll<SVGGElement>('[data-name]').forEach((el) => {
       const name = (el.getAttribute('data-name') || '').toUpperCase();
-      el.classList.toggle(SEARCH_CLASS, q.length > 0 && name.includes(q));
-      el.classList.toggle(SELECTED_CLASS, !!selectedRoom && name.split('|')[0] === selectedRoom.id.toUpperCase());
+      const parts = name.split('|').map((s) => s.trim());
+      const matchesSearch = q.length > 0 && parts.some((p) => p.includes(q));
+      const matchesSelected = !!selId && (
+        parts.includes(selId) ||
+        parts.some((p) => p === selId || p.replace(/[PKL]$/, '') === selId.replace(/[PKL]$/, ''))
+      );
+      el.classList.toggle(SEARCH_CLASS, matchesSearch);
+      el.classList.toggle(SELECTED_CLASS, matchesSelected);
     });
   }, [query, selectedRoom, floor, buildingId]);
 

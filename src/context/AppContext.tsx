@@ -8,6 +8,7 @@ interface AppContextType {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   selectedRoomForNav: string | null;
+  roomNavTimestamp: number;
   navigateToClassroom: (room: string) => void;
   clearRoomNavigation: () => void;
 
@@ -57,6 +58,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedRoomForNav, setSelectedRoomForNav] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('room')
   );
+  const [roomNavTimestamp, setRoomNavTimestamp] = useState<number>(0);
   const [viewMode, setViewMode] = useState<ViewLayoutMode>(
     () => (new URLSearchParams(window.location.search).get('view') as ViewLayoutMode) || 'phone'
   );
@@ -78,6 +80,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const navigateToClassroom = (room: string) => {
     setSelectedRoomForNav(room);
+    setRoomNavTimestamp(Date.now());
     setActiveTab('map');
   };
 
@@ -114,6 +117,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeTab,
         setActiveTab,
         selectedRoomForNav,
+        roomNavTimestamp,
         navigateToClassroom,
         clearRoomNavigation,
         viewMode,

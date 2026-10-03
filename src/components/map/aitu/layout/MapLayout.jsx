@@ -95,9 +95,26 @@ const MapLayout = ({ children }) => {
             .room-map-group-search-target line,
             .room-map-group-search-target polygon,
             .room-map-group-search-target polyline { fill: ${C.highlight} !important; }
+
+            @keyframes room-selected-pulse {
+              0%, 100% {
+                fill: #f59e0b !important;
+                filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.9));
+              }
+              50% {
+                fill: #fbbf24 !important;
+                filter: drop-shadow(0 0 14px rgba(251, 191, 36, 1));
+              }
+            }
+
             .room-map-group-selected line,
             .room-map-group-selected polygon,
-            .room-map-group-selected polyline { fill: ${C.selected} !important; }
+            .room-map-group-selected polyline {
+              fill: ${C.selected} !important;
+              stroke: #ffffff !important;
+              stroke-width: 1.5 !important;
+              animation: room-selected-pulse 1.4s infinite ease-in-out !important;
+            }
           `}
         </style>
       </defs>

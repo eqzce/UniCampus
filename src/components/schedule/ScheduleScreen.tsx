@@ -247,12 +247,9 @@ export const ScheduleScreen: React.FC = () => {
             className="px-4 py-2.5 flex items-center justify-between cursor-pointer border-b border-slate-100 select-none bg-slate-50/70 rounded-t-3xl"
           >
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full shrink-0">
-                Selected Class
-              </span>
-              <span className="text-xs font-bold text-slate-800 truncate">
+              <h3 className="text-sm font-bold text-slate-900 truncate">
                 {selectedClass.courseName}
-              </span>
+              </h3>
               {isCollapsed && primaryDeadline && (
                 <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md truncate ml-1">
                   {primaryDeadline.title} ({primaryDeadline.daysLeft === 0 ? 'Today' : `${primaryDeadline.daysLeft}d`})
@@ -303,7 +300,7 @@ export const ScheduleScreen: React.FC = () => {
                     <span>{selectedClass.room}</span>
                     <ArrowRight className="w-3.5 h-3.5 stroke-[2.5] group-hover:translate-x-0.5 transition-transform" />
                   </button>
-                  <span className="text-slate-500 font-normal">({selectedClass.building})</span>
+                  <span className="text-slate-500 font-normal">(Main Campus)</span>
                 </div>
 
                 <div className="text-[11px] text-slate-500">
