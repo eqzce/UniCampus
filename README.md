@@ -107,15 +107,3 @@ UniCampus/
 3. Откройте в браузере: `http://localhost:5173`
 
 ---
-
-## 🗺 Как дополнять карту и другие функции в дальнейшем:
-
-1. **Реализация карты (`src/components/map/CampusMapScreen.tsx` & `src/services/mapEngine.ts`)**:
-   - В компоненте `CampusMapScreen.tsx` выделен блок `EXTENSION POINT`, где вы сможете подключить любую технологию:
-     - Векторные SVG/GeoJSON поэтажные планы (Floor 1, 2, 3...).
-     - Интерактивную библиотеку (Leaflet, MapLibre, Mapbox GL JS).
-     - 3D-движок для трехмерной карты (Three.js / React Three Fiber).
-   - В `src/services/mapEngine.ts` функция `calculateRoute()` готова для внедрения алгоритма поиска кратчайшего пути (A* / Дейкстра) между аудиториями.
-
-2. **Подключение бэкенда (`src/services/api.ts`)**:
-   - Замените mock-вызовы в `ApiService` на реальные REST API запросы к вашему серверу (FastAPI / Django).
