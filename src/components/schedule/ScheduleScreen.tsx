@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Header } from '../common/Header';
 import { FloatingActionButton } from '../common/FloatingActionButton';
 import { useApp } from '../../context/AppContext';
-import { WEEKLY_SCHEDULE } from '../../data/mockData';
 import type { ScheduleItem, AssessmentCategory } from '../../types';
 import {
   Search,
@@ -14,19 +13,34 @@ import {
   Clock,
   ArrowRight,
   BookOpen,
+  Plus,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 const HOURS = ['09:00', '10:00', '11:00', '12:00', '1:00', '2:00', '3:00', '4:00'];
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 
 export const ScheduleScreen: React.FC = () => {
-  const { navigateToClassroom, assignments, setActiveTab, setSelectedCourseFilter } = useApp();
+  const {
+    navigateToClassroom,
+    assignments,
+    scheduleItems,
+    setIsAddScheduleOpen,
+    addHomeworkForCourse,
+    removeScheduleItem,
+    clearAllSchedule,
+    resetDefaultSchedule,
+    setActiveTab,
+    setSelectedCourseFilter,
+  } = useApp();
+
   const [searchQuery, setSearchQuery] = useState('');
   
   // Requirement: Appears ONLY when clicked, initially null (supports ?class= for testing)
   const [selectedClass, setSelectedClass] = useState<ScheduleItem | null>(() => {
     const classId = new URLSearchParams(window.location.search).get('class');
-    if (classId) return WEEKLY_SCHEDULE.find((it) => it.id === classId) || null;
+    if (classId) return scheduleItems.find((it) => it.id === classId) || null;
     return null;
   });
   
@@ -38,8 +52,12 @@ export const ScheduleScreen: React.FC = () => {
   // State to toggle additional deadlines ("Show more")
   const [showMoreDeadlines, setShowMoreDeadlines] = useState(false);
 
+  // Quick inline homework input inside selected class sheet
+  const [isAddingHwInline, setIsAddingHwInline] = useState(false);
+  const [inlineHwTitle, setInlineHwTitle] = useState('');
+
   // Filter schedule based on search query
-  const filteredSchedule = WEEKLY_SCHEDULE.filter((item) => {
+  const filteredSchedule = scheduleItems.filter((item) => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -113,6 +131,29 @@ export const ScheduleScreen: React.FC = () => {
     setSelectedClass(item);
     setIsCollapsed(false);
     setShowMoreDeadlines(false);
+    setIsAddingHwInline(false);
+    setInlineHwTitle('');
+  };
+
+  const handleDeleteClass = (id: string) => {
+    removeScheduleItem(id);
+    if (selectedClass?.id === id) {
+      setSelectedClass(null);
+    }
+  };
+
+  const handleSaveInlineHomework = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClass || !inlineHwTitle.trim()) return;
+    addHomeworkForCourse(
+      selectedClass.courseName,
+      selectedClass.courseCode.split('-')[0],
+      inlineHwTitle.trim(),
+      'Tomorrow',
+      1
+    );
+    setInlineHwTitle('');
+    setIsAddingHwInline(false);
   };
 
   return (
@@ -122,41 +163,77 @@ export const ScheduleScreen: React.FC = () => {
 
       {/* Main Content Area: Timetable Grid */}
       <div
-        className={`flex-1 overflow-y-auto px-3.5 py-3 space-y-3 ${
+        className={`flex-1 overflow-y-auto px-3.5 py-3 space-y-2.5 ${
           selectedClass ? (isCollapsed ? 'pb-20' : 'pb-60') : 'pb-20'
         }`}
       >
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search by course or professor"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-slate-200/80 rounded-full pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#18458b]/20 shadow-2xs transition-all"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+        {/* Search bar + Add Class Button (single + icon) */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search course, room..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white border border-slate-200/80 rounded-full pl-9 pr-7 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#18458b]/20 shadow-2xs transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setIsAddScheduleOpen(true)}
+            className="flex items-center gap-1.5 bg-[#18458b] hover:bg-[#14366d] active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-full shadow-sm transition-all shrink-0 cursor-pointer"
+            title="Add custom course, classroom & homework"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Add Class</span>
+          </button>
         </div>
 
-        {/* Week Navigator */}
+        {/* Week Navigator + Clear/Reset Schedule controls */}
         <div className="bg-white rounded-xl py-2 px-3 flex items-center justify-between shadow-2xs border border-slate-100">
-          <button className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="text-xs font-bold text-slate-800 tracking-wide">
-            October 26 - 31
-          </span>
-          <button className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 transition-colors">
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-xs font-bold text-slate-800 tracking-wide">
+              October 26 - 31
+            </span>
+            <button className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {scheduleItems.length > 0 ? (
+            <button
+              onClick={() => {
+                setSelectedClass(null);
+                clearAllSchedule();
+              }}
+              className="text-[10.5px] font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/80 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+              title="Remove all default classes to build your own schedule"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Clear All</span>
+            </button>
+          ) : (
+            <button
+              onClick={resetDefaultSchedule}
+              className="text-[10.5px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100/80 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+              title="Restore default template schedule"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Restore Defaults</span>
+            </button>
+          )}
         </div>
 
         {/* Timetable Grid Container */}
@@ -193,15 +270,20 @@ export const ScheduleScreen: React.FC = () => {
                   return (
                     <div
                       key={day}
-                      className="border-l border-slate-100/70 min-h-[38px] p-0.5 relative"
+                      className="border-l border-slate-100/70 min-h-[38px] p-0.5 relative flex flex-col gap-0.5"
                     >
                       {itemsInSlot.map((item) => {
                         const isSelected = selectedClass?.id === item.id;
                         return (
-                          <button
+                          <div
                             key={item.id}
                             onClick={() => handleClassClick(item)}
-                            className={`w-full min-h-[46px] rounded-md p-1 text-left transition-all border flex flex-col justify-start ${getColorClasses(
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') handleClassClick(item);
+                            }}
+                            className={`group relative w-full min-h-[46px] rounded-md p-1 text-left transition-all border flex flex-col justify-start cursor-pointer ${getColorClasses(
                               item.color
                             )} ${
                               isSelected
@@ -209,7 +291,20 @@ export const ScheduleScreen: React.FC = () => {
                                 : 'opacity-90 hover:opacity-100'
                             }`}
                           >
-                            <div className="text-[9px] font-bold leading-tight truncate">
+                            {/* Quick Delete button on class tile */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClass(item.id);
+                              }}
+                              title="Remove class from schedule"
+                              className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-black/10 hover:bg-rose-500 hover:text-white text-current flex items-center justify-center opacity-70 hover:opacity-100 transition-all"
+                            >
+                              <X className="w-2.5 h-2.5 stroke-[2.5]" />
+                            </button>
+
+                            <div className="text-[9px] font-bold leading-tight truncate pr-3">
                               {item.startTime}
                             </div>
                             <div className="text-[9px] font-semibold leading-tight break-words">
@@ -220,7 +315,7 @@ export const ScheduleScreen: React.FC = () => {
                                 {item.room.replace('Room ', '')}
                               </div>
                             )}
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -238,7 +333,7 @@ export const ScheduleScreen: React.FC = () => {
       {selectedClass && (
         <div
           className={`absolute bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200/90 shadow-[0_-10px_25px_rgba(0,0,0,0.12)] rounded-t-3xl transition-all duration-200 animate-in slide-in-from-bottom flex flex-col ${
-            isCollapsed ? 'max-h-[56px]' : 'max-h-[75%]'
+            isCollapsed ? 'max-h-[56px]' : 'max-h-[78%]'
           }`}
         >
           {/* Top Header Bar */}
@@ -257,8 +352,17 @@ export const ScheduleScreen: React.FC = () => {
               )}
             </div>
 
-            {/* Action Buttons: Collapse/Expand and Close */}
+            {/* Action Buttons: Delete ANY class (default or custom), Collapse/Expand and Close */}
             <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => handleDeleteClass(selectedClass.id)}
+                className="px-2 h-7 rounded-lg text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 flex items-center gap-1 text-[11px] font-semibold transition-colors cursor-pointer"
+                title="Remove this class from schedule"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove</span>
+              </button>
+
               <button
                 onClick={() => setIsCollapsed(!isCollapsed)}
                 className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 flex items-center justify-center transition-colors"
@@ -300,7 +404,7 @@ export const ScheduleScreen: React.FC = () => {
                     <span>{selectedClass.room}</span>
                     <ArrowRight className="w-3.5 h-3.5 stroke-[2.5] group-hover:translate-x-0.5 transition-transform" />
                   </button>
-                  <span className="text-slate-500 font-normal">(Main Campus)</span>
+                  <span className="text-slate-500 font-normal">({selectedClass.building || 'Main Campus'})</span>
                 </div>
 
                 <div className="text-[11px] text-slate-500">
@@ -308,12 +412,40 @@ export const ScheduleScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Requirement: Only this day's / nearest deadline + 'Show more' button */}
+              {/* Deadlines / Homework Section + 'Add Homework' button */}
               <div className="pt-2 border-t border-slate-100">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  <Clock className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Upcoming Deadline</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <Clock className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Homework / Deadlines</span>
+                  </div>
+                  <button
+                    onClick={() => setIsAddingHwInline(!isAddingHwInline)}
+                    className="text-[11px] font-bold text-[#18458b] hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded-lg cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Homework</span>
+                  </button>
                 </div>
+
+                {isAddingHwInline && (
+                  <form onSubmit={handleSaveInlineHomework} className="mb-2 flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={inlineHwTitle}
+                      onChange={(e) => setInlineHwTitle(e.target.value)}
+                      placeholder="Enter homework task..."
+                      className="flex-1 text-xs border border-blue-200 rounded-xl px-2.5 py-1.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#18458b]/20"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      className="bg-[#18458b] text-white text-xs font-semibold px-3 py-1.5 rounded-xl hover:bg-blue-800 shrink-0"
+                    >
+                      Save
+                    </button>
+                  </form>
+                )}
 
                 {primaryDeadline ? (
                   <div className="space-y-2">
@@ -417,7 +549,7 @@ export const ScheduleScreen: React.FC = () => {
                 ) : (
                   <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100 text-xs text-slate-400">
                     <BookOpen className="w-3.5 h-3.5 mx-auto mb-1 text-slate-300" />
-                    No upcoming deadlines for this course
+                    No upcoming deadlines — click "Add Homework" above
                   </div>
                 )}
               </div>

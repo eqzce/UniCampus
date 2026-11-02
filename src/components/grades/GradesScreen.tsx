@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Header } from '../common/Header';
 import { FloatingActionButton } from '../common/FloatingActionButton';
 import { useApp } from '../../context/AppContext';
 import { COURSES_LIST } from '../../data/mockData';
 import type { Assignment, AssignmentStatus, AssessmentCategory } from '../../types';
 import {
-  MoreVertical,
   CheckCircle2,
   Circle,
   ChevronDown,
@@ -13,6 +12,7 @@ import {
   FileEdit,
   Clock,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 
 export const GradesScreen: React.FC = () => {
@@ -24,11 +24,27 @@ export const GradesScreen: React.FC = () => {
     setSelectedCourseFilter,
     toggleAssignmentStatus,
     addPersonalNote,
+    removeAssignment,
+    setIsAddScheduleOpen,
   } = useApp();
 
   const [activeNoteModalFor, setActiveNoteModalFor] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [sortBy, setSortBy] = useState<'deadline' | 'course' | 'type'>('deadline');
+
+  const allCourses = useMemo(() => {
+    const map = new Map(COURSES_LIST.map((c) => [c.code, c]));
+    for (const asg of assignments) {
+      if (!map.has(asg.courseCode)) {
+        map.set(asg.courseCode, {
+          code: asg.courseCode,
+          name: asg.courseName,
+          shortName: asg.courseName.slice(0, 14),
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [assignments]);
 
   const filterTabs: { id: 'all' | AssignmentStatus; label: string }[] = [
     { id: 'all', label: 'All' },
@@ -109,7 +125,7 @@ export const GradesScreen: React.FC = () => {
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3 pb-20">
         
-        {/* Subject / Course Selector Chips (разделение по предметам) */}
+        {/* Subject / Course Selector Chips */}
         <div>
           <div className="flex items-center justify-between mb-1.5 px-0.5">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -144,7 +160,7 @@ export const GradesScreen: React.FC = () => {
               </span>
             </button>
 
-            {COURSES_LIST.map((course) => {
+            {allCourses.map((course) => {
               const isSelected = selectedCourseFilter === course.code;
               const count = assignments.filter((a) => a.courseCode === course.code).length;
 
@@ -192,18 +208,17 @@ export const GradesScreen: React.FC = () => {
           })}
         </div>
 
-        {/* Action Bar: Add Personal Note & Sort */}
+        {/* Action Bar: Add Course/Homework & Sort */}
         <div className="flex items-center justify-between text-xs px-1">
-          <button
-            onClick={() => {
-              const first = filteredAssessments[0] || assignments[0];
-              if (first) handleOpenNoteModal(first);
-            }}
-            className="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 active:scale-95 transition-transform"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Add Personal Note</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsAddScheduleOpen(true)}
+              className="text-[#18458b] hover:text-blue-800 font-bold flex items-center gap-1 active:scale-95 transition-transform cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Add Class / Homework</span>
+            </button>
+          </div>
 
           <button
             onClick={() =>
@@ -229,15 +244,19 @@ export const GradesScreen: React.FC = () => {
                 key={asg.id}
                 className="bg-white rounded-2xl p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between hover:shadow-md transition-shadow relative group"
               >
-                {/* Category & Options */}
+                {/* Category & Delete Option */}
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                   <span
                     className={`text-[9.5px] px-2 py-0.5 rounded-full border ${catBadge.classes}`}
                   >
                     {catBadge.label}
                   </span>
-                  <button className="text-slate-400 hover:text-slate-600 p-0.5 -mr-1">
-                    <MoreVertical className="w-3.5 h-3.5" />
+                  <button
+                    onClick={() => removeAssignment(asg.id)}
+                    title="Delete task"
+                    className="text-slate-300 hover:text-rose-500 p-0.5 -mr-1 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
 

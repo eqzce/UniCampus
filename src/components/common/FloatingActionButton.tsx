@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { Plus, Bot, DoorClosed, RefreshCw, X } from 'lucide-react';
+import { Plus, Bot, DoorClosed, RefreshCw, CalendarPlus, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const FloatingActionButton: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { setIsAIAssistantOpen, setIsBookingOpen, setIsNotificationsOpen } = useApp();
+  const {
+    setIsAIAssistantOpen,
+    setIsBookingOpen,
+    setIsNotificationsOpen,
+    setIsAddScheduleOpen,
+  } = useApp();
 
   const handleAction = (action: () => void) => {
     setIsOpen(false);
@@ -16,6 +21,14 @@ export const FloatingActionButton: React.FC = () => {
       {/* Expanded Quick Menu */}
       {isOpen && (
         <div className="mb-3 flex flex-col items-end gap-2 transition-all animate-in fade-in slide-in-from-bottom-3 duration-200 pointer-events-auto">
+          <button
+            onClick={() => handleAction(() => setIsAddScheduleOpen(true))}
+            className="flex items-center gap-2 bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
+          >
+            <CalendarPlus className="w-4 h-4" />
+            <span>Add Class & Homework</span>
+          </button>
+
           <button
             onClick={() => handleAction(() => setIsAIAssistantOpen(true))}
             className="flex items-center gap-2 bg-indigo-600 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg hover:bg-indigo-700 active:scale-95 transition-all"

@@ -11,6 +11,7 @@ import { AIAssistantModal } from './components/ai/AIAssistantModal';
 import { RoomBookingModal } from './components/booking/RoomBookingModal';
 import { NotificationsModal } from './components/notifications/NotificationsModal';
 import { ProfileModal } from './components/profile/ProfileModal';
+import { AddScheduleModal } from './components/schedule/AddScheduleModal';
 import {
   Smartphone,
   LayoutGrid,
@@ -19,6 +20,7 @@ import {
   DoorClosed,
   Bell,
   GraduationCap,
+  CalendarPlus,
 } from 'lucide-react';
 import './App.css';
 
@@ -30,9 +32,16 @@ const MainContent: React.FC = () => {
     setIsAIAssistantOpen,
     setIsBookingOpen,
     setIsNotificationsOpen,
+    setIsAddScheduleOpen,
     unreadAnnouncementsCount,
     student,
   } = useApp();
+
+  // True ONLY inside the compiled Capacitor Android APK (keeps web preview intact on GitHub / browser)
+  const isNativeApk = Boolean(
+    typeof window !== 'undefined' &&
+      (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+  );
 
   const renderFullscreenContent = () => {
     switch (activeTab) {
@@ -49,6 +58,22 @@ const MainContent: React.FC = () => {
         return <DashboardScreen />;
     }
   };
+
+  if (isNativeApk) {
+    return (
+      <div className="h-dvh w-full bg-white text-slate-900 flex flex-col font-sans overflow-hidden select-none">
+        <div className="flex-1 overflow-hidden flex flex-col relative">
+          {renderFullscreenContent()}
+        </div>
+        <BottomNav />
+        <ProfileModal />
+        <AIAssistantModal />
+        <RoomBookingModal />
+        <NotificationsModal />
+        <AddScheduleModal />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
@@ -118,6 +143,14 @@ const MainContent: React.FC = () => {
         {/* Quick Launch Shortcuts */}
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setIsAddScheduleOpen(true)}
+            className="flex items-center gap-1.5 text-xs bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl font-medium transition-all"
+          >
+            <CalendarPlus className="w-3.5 h-3.5 text-emerald-300" />
+            <span>Add Class</span>
+          </button>
+
+          <button
             onClick={() => setIsAIAssistantOpen(true)}
             className="flex items-center gap-1.5 text-xs bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 px-3 py-1.5 rounded-xl font-medium transition-all"
           >
@@ -170,6 +203,7 @@ const MainContent: React.FC = () => {
       <AIAssistantModal />
       <RoomBookingModal />
       <NotificationsModal />
+      <AddScheduleModal />
     </div>
   );
 };
