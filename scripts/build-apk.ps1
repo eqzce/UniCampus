@@ -188,6 +188,20 @@ Push-Location $androidDir
 $gradleExit = $LASTEXITCODE
 Pop-Location
 
+# Restore portable HTTPS distributionUrl in gradle-wrapper.properties so GitHub Actions (Linux) works cleanly
+if (Test-Path $wrapperPropsPath) {
+    $portableWrapperContent = @(
+        "distributionBase=GRADLE_USER_HOME",
+        "distributionPath=wrapper/dists",
+        "distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.3-bin.zip",
+        "networkTimeout=180000",
+        "validateDistributionUrl=false",
+        "zipStoreBase=GRADLE_USER_HOME",
+        "zipStorePath=wrapper/dists"
+    ) -join "`r`n"
+    [System.IO.File]::WriteAllText($wrapperPropsPath, $portableWrapperContent, $utf8NoBom)
+}
+
 if ($gradleExit -ne 0) {
     Write-Host "[ERROR] Gradle APK build failed." -ForegroundColor Red
     Pause-IfInteractive
