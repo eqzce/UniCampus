@@ -25,7 +25,12 @@ Set-Location $projectRoot
 $env:JAVA_TOOL_OPTIONS = "-Djava.net.preferIPv4Stack=true -Dfile.encoding=UTF-8"
 $env:GRADLE_OPTS = ""
 
-# 1. Configure Java 17
+# 1. Configure Node.js & Java 17
+$vsNodePath = "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VisualStudio\NodeJs"
+if (Test-Path (Join-Path $vsNodePath "node.exe")) {
+    $env:Path = "$vsNodePath;$env:Path"
+}
+
 $temurinPath = "C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot"
 if (Test-Path (Join-Path $temurinPath "bin\java.exe")) {
     $env:JAVA_HOME = $temurinPath
@@ -53,6 +58,13 @@ if (-not (Test-Path (Join-Path $projectRoot "node_modules\@capacitor\core")) -or
 } else {
     Write-Host ""
     Write-Host "[2/5] Capacitor packages already installed." -ForegroundColor Green
+}
+
+# Ensure @capacitor/cli allows Node 20 LTS as well as Node 22+
+$capCliPkg = Join-Path $projectRoot "node_modules\@capacitor\cli\package.json"
+if (Test-Path $capCliPkg) {
+    $capContent = [System.IO.File]::ReadAllText($capCliPkg) -replace '">=22\.0\.0"', '">=20.0.0"'
+    [System.IO.File]::WriteAllText($capCliPkg, $capContent, $utf8NoBom)
 }
 
 # 3. Build web application

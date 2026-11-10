@@ -1,11 +1,43 @@
 import React from 'react';
+import { useApp } from '../../context/AppContext';
 import { DashboardScreen } from '../dashboard/DashboardScreen';
 import { ScheduleScreen } from '../schedule/ScheduleScreen';
 import { GradesScreen } from '../grades/GradesScreen';
 import { CampusMapScreen } from '../map/CampusMapScreen';
+import { TeacherDashboard } from '../teacher/TeacherDashboard';
 import { BottomNav } from '../common/BottomNav';
+import { TeacherBottomNav } from '../teacher/TeacherBottomNav';
 
 export const AllScreensView: React.FC = () => {
+  const { userRole } = useApp();
+
+  if (userRole === 'teacher') {
+    return (
+      <div className="w-full min-h-screen bg-[#eaeff5] py-8 px-4 flex flex-col items-center">
+        <h1 className="text-xl md:text-2xl font-bold text-slate-800 mb-8 tracking-tight text-center">
+          UniCampus: Teacher Portal (4-Screen Overview)
+        </h1>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl w-full justify-items-center">
+          {(['gradebook', 'attendance', 'tasks', 'schedule'] as const).map((tab) => (
+            <div
+              key={tab}
+              className="w-[340px] h-[680px] bg-white rounded-[40px] shadow-[0_20px_50px_rgba(24,69,139,0.15)] border-8 border-slate-900/90 overflow-hidden flex flex-col relative ring-1 ring-slate-900/10"
+            >
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-4 bg-slate-900 rounded-full z-40"></div>
+              <div className="flex-1 overflow-hidden flex flex-col pt-3">
+                <TeacherDashboard forcedTab={tab} />
+              </div>
+              <TeacherBottomNav forcedTab={tab} />
+              <div className="h-4 bg-white flex items-center justify-center">
+                <div className="w-28 h-1 bg-slate-300 rounded-full"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full min-h-screen bg-[#eaeff5] py-8 px-4 flex flex-col items-center">
       {/* Top Title from Screenshot */}

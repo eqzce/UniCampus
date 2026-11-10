@@ -8,11 +8,14 @@ import {
   CheckCircle2,
   Circle,
   ChevronDown,
+  ChevronUp,
   Plus,
   FileEdit,
   Clock,
   Sparkles,
   Trash2,
+  Award,
+  MessageSquare,
 } from 'lucide-react';
 
 export const GradesScreen: React.FC = () => {
@@ -26,11 +29,15 @@ export const GradesScreen: React.FC = () => {
     addPersonalNote,
     removeAssignment,
     setIsAddScheduleOpen,
+    grades,
+    student,
+    currentUser,
   } = useApp();
 
   const [activeNoteModalFor, setActiveNoteModalFor] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [sortBy, setSortBy] = useState<'deadline' | 'course' | 'type'>('deadline');
+  const [showGradebookFeedback, setShowGradebookFeedback] = useState(true);
 
   const allCourses = useMemo(() => {
     const map = new Map(COURSES_LIST.map((c) => [c.code, c]));
@@ -45,6 +52,17 @@ export const GradesScreen: React.FC = () => {
     }
     return Array.from(map.values());
   }, [assignments]);
+
+  // Filter live grades for current student and selected course
+  const studentGrades = useMemo(() => {
+    const activeId = currentUser?.role === 'student' ? currentUser.id : 'usr-student-1';
+    const own = grades.filter(
+      (g) => g.student_id === activeId || g.student_email === currentUser?.email
+    );
+    const base = own.length > 0 ? own : grades.filter((g) => g.student_id === 'usr-student-1');
+    if (selectedCourseFilter === 'all') return base;
+    return base.filter((g) => g.course_code === selectedCourseFilter);
+  }, [grades, currentUser, selectedCourseFilter]);
 
   const filterTabs: { id: 'all' | AssignmentStatus; label: string }[] = [
     { id: 'all', label: 'All' },
@@ -186,6 +204,83 @@ export const GradesScreen: React.FC = () => {
               );
             })}
           </div>
+        </div>
+
+        {/* Live Teacher Gradebook & Feedback Section (Synced with PostgreSQL) */}
+        <div className="bg-white rounded-2xl p-3.5 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100">
+          <div
+            onClick={() => setShowGradebookFeedback(!showGradebookFeedback)}
+            className="flex items-center justify-between cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Award className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900">
+                  Official Grades & Teacher Feedback
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  Cumulative GPA: <b className="text-[#18458b]">{student.gpa.toFixed(2)}</b> / 4.00
+                </p>
+              </div>
+            </div>
+            <button className="text-slate-400 hover:text-slate-700 p-1">
+              {showGradebookFeedback ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+
+          {showGradebookFeedback && (
+            <div className="mt-3 space-y-2 border-t border-slate-100 pt-2.5">
+              {studentGrades.length > 0 ? (
+                studentGrades.map((grd) => (
+                  <div
+                    key={grd.id}
+                    className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/60 space-y-1"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-[#18458b]">
+                          {grd.course_code || 'COURSE'}
+                        </span>
+                        <span className="text-[10px] font-semibold bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">
+                          {grd.category}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-xs font-black px-2 py-0.5 rounded-lg ${
+                          grd.score >= 90
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : grd.score >= 75
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {grd.score} / 100
+                      </span>
+                    </div>
+                    {grd.feedback && (
+                      <div className="flex items-start gap-1.5 text-[11px] text-slate-600 pt-0.5">
+                        <MessageSquare className="w-3 h-3 text-blue-500 mt-0.5 shrink-0" />
+                        <span>
+                          <b className="text-slate-700">{grd.teacher_name || 'Professor'}:</b>{' '}
+                          {grd.feedback}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-slate-400 text-center py-2">
+                  No official grades recorded for this course filter yet.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Status Filter Tabs (All, To-Do, Submitted, Graded) */}

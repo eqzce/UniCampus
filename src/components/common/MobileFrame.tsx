@@ -4,13 +4,19 @@ import { DashboardScreen } from '../dashboard/DashboardScreen';
 import { ScheduleScreen } from '../schedule/ScheduleScreen';
 import { GradesScreen } from '../grades/GradesScreen';
 import { CampusMapScreen } from '../map/CampusMapScreen';
+import { TeacherDashboard } from '../teacher/TeacherDashboard';
 import { BottomNav } from './BottomNav';
+import { TeacherBottomNav } from '../teacher/TeacherBottomNav';
 import { Wifi, Battery, Signal } from 'lucide-react';
 
 export const MobileFrame: React.FC = () => {
-  const { activeTab } = useApp();
+  const { activeTab, userRole } = useApp();
 
   const renderActiveScreen = () => {
+    if (userRole === 'teacher') {
+      return <TeacherDashboard />;
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return <DashboardScreen />;
@@ -55,8 +61,8 @@ export const MobileFrame: React.FC = () => {
             {renderActiveScreen()}
           </div>
 
-          {/* Bottom Navigation */}
-          <BottomNav />
+          {/* Bottom Navigation (Role-aware) */}
+          {userRole === 'teacher' ? <TeacherBottomNav /> : <BottomNav />}
 
           {/* Home indicator bar */}
           <div className="h-4 bg-white flex items-center justify-center">

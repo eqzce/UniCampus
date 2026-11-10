@@ -1,109 +1,124 @@
-# UniCampus - Unified University Application
+# UniCampus — Full-Stack Unified University Platform (Web + Android APK + Render PostgreSQL)
 
-Унифицированная цифровая платформа для университета, объединяющая расписание, аудиторную навигацию по кампусу, управление дедлайнами и заданиями, бронирование аудиторий и встроенного ИИ-академического советника.
-
-Проект разработан по материалам:
-- **Assignment 1**: Identifying the Business Idea (UniCampus, B2B SaaS, интеграция расписания с картой, AI-ассистент)
-- **Assignment 2**: Value Proposition & Business Model Canvas (Customer Jobs, Pain Relievers, Gain Creators)
-- **Assignment 3**: Customer Development & Technical Concept (Интервью со студентами, MVP спецификация, User Flow)
-- **UI/UX Design**: Точное соответствие 4 экранам мобильного интерфейса из прототипа (`Gemini_Generated_Image_mxxi7lmxxi7lmxxi`).
+Унифицированная цифровая платформа для университета (**Astana IT University / AITU**), объединяющая ролевой доступ (**Student / Teacher RBAC**), интерактивную зачетную книжку (Gradebook), трекер посещаемости (Attendance), управление расписанием и дедлайнами, 2.5D/SVG навигацию по этажам кампуса, бронирование аудиторий, AI-советника и полный **Offline Mode** (сохранение расписания, карты и оценок без интернета).
 
 ---
 
-## Основные экраны и функционал шаблона
-
-1. **DASHBOARD (Главный экран)**:
-   - Приветствие студента (`Welcome, Arystan!`) с текущим GPA и статусом.
-   - Карточка **Today's Schedule** с быстрым переходом к аудитории на карте (`Room 301`, `Room 105`).
-   - Карточка **Upcoming Deadlines** с цветовой дифференциацией срочности.
-   - Карточка **Recent Announcements** с уведомлениями о переносах занятий.
-   - Индикатор готовности офлайн-кэширования данных.
-
-2. **SCHEDULE (Интерактивное расписание)**:
-   - Поиск по названию курса или имени преподавателя.
-   - Навигатор по неделям (`< October 26 - 31 >`).
-   - Сетка расписания Понедельник–Пятница (09:00 – 16:00) с цветными плашками занятий.
-   - Интерактивная карточка выбранного занятия (`Current Class: 10:00 - Physics, Room 301`) с кнопкой **"Show on Map"**, которая мгновенно переносит пользователя на карту с построенным маршрутом к кабинету.
-
-3. **ASSIGNMENTS (Задания и дедлайны)**:
-   - Фильтрация по статусам: **All**, **To-Do**, **Submitted**, **Graded**.
-   - Добавление личных заметок (`+ Add Personal Note`) и сортировка по дедлайну (`Sort by Deadline`).
-   - 2-колоночная сетка карточек заданий с отметками готовности (чекбоксы с интерактивным переключением).
-
-4. **CAMPUS MAP (Интерактивная карта кампуса)**:
-   - Строка поиска аудиторий и кафедр (`Search for room or departments`) с автодополнением.
-   - 2.5D изометрический вид кампуса с корпусами: **Science Building**, **Main Library**, **Student Center**, **All Classrooms**.
-   - Построение маршрута от позиции пользователя (`User's location`) к целевой аудитории (`Classroom 1 / Room 301`).
-   - Карточка направления (`Classroom 1 • Due: Class Room 301 • [Get Directions]`).
-   - Инструменты карты: геолокация, справочник корпусов, масштаб (`+`/`-`), переключатель этажей (`F1-F4`), компас ориентации.
-
-5. **Дополнительные функции (из Assignment 1-3)**:
-   - **UniCampus AI Advisor**: Диалоговый ассистент по академическим вопросам, условиям сохранения стипендии (GPA > 3.50), дедлайнам и кабинетам.
-   - **Room Booking**: Модальное окно бронирования коворкингов и учебных комнат.
-   - **Offline Mode & Alerts**: Панель уведомлений об изменениях в расписании и офлайн-синхронизация.
-   - **3 режима отображения**:
-     - *Interactive Phone*: реалистичный мобильный симулятор телефона.
-     - *4-Screens Mockup*: презентационный вид всех 4 экранов бок о бок (в точности как на изображении из задания).
-     - *Fullscreen*: полноэкранный адаптивный режим.
-
----
-
-## Архитектура проекта
-
-Код структурирован модульно для максимально удобного расширения:
+## 1. Архитектура Full-Stack и Ролевая Модель (RBAC)
 
 ```
 UniCampus/
-├── src/
-│   ├── types/
-│   │   └── index.ts                 # TypeScript модели данных (Schedule, Assignment, Building, Room)
-│   ├── data/
-│   │   └── mockData.ts              # Тестовые данные (студент, пары, дедлайны, корпуса, аудитории)
-│   ├── context/
-│   │   └── AppContext.tsx           # Глобальное состояние (активный таб, навигация, фильтры, офлайн)
+├── backend/                         # Production REST API (Node.js + Express + PostgreSQL / Prisma)
+│   ├── prisma/
+│   │   └── schema.prisma            # Схема БД PostgreSQL (Users, Courses, Grades, Attendance, Assignments, Schedule, RoomBookings)
+│   ├── src/
+│   │   ├── index.js                 # Express сервер, JWT авторизация, CORS для Web и Capacitor APK
+│   │   ├── db.js                    # Драйвер PostgreSQL (pg Pool с авто-миграцией) + локальный фоллбэк
+│   │   ├── seed.js                  # Скрипт предзаполнения БД демо-аккаунтами (`npm run backend:seed`)
+│   │   └── seedData.js              # Начальные курсы AITU, студенты, преподаватели, оценки и расписание
+│   └── package.json
+├── src/                             # Frontend (React 19 + TypeScript + Tailwind CSS v4 + Capacitor)
+│   ├── config/
+│   │   └── apiConfig.ts             # Централизованный конфиг API (`VITE_API_URL`, таймаут 60 сек для Render Cold Start)
 │   ├── services/
-│   │   ├── api.ts                   # Слой API (готов к подключению FastAPI / Django)
-│   │   └── mapEngine.ts             # Точка расширения для indoor-навигации и алгоритмов маршрутизации
+│   │   ├── api.ts                   # REST API клиент с JWT заголовками (`Authorization: Bearer <token>`)
+│   │   └── offlineStorage.ts        # Менеджер Offline Mode (кэширование Schedule, Map, Grades, GPA и Attendance)
 │   ├── components/
-│   │   ├── common/
-│   │   │   ├── Header.tsx           # Верхняя синяя панель с заголовком и колокольчиком
-│   │   │   ├── BottomNav.tsx        # Нижняя навигационная панель (4 таба)
-│   │   │   ├── FloatingActionButton.tsx # Зеленая кнопка действий (+)
-│   │   │   └── MobileFrame.tsx      # Оболочка смартфона с Dynamic Island и строкой состояния
-│   │   ├── dashboard/
-│   │   │   └── DashboardScreen.tsx  # Экран дашборда
-│   │   ├── schedule/
-│   │   │   └── ScheduleScreen.tsx   # Экран расписания
-│   │   ├── assignments/
-│   │   │   └── AssignmentsScreen.tsx# Экран заданий
-│   │   ├── map/
-│   │   │   └── CampusMapScreen.tsx  # Экран карты кампуса (со всеми точками расширения)
-│   │   ├── ai/
-│   │   │   └── AIAssistantModal.tsx # AI Академический советник
-│   │   ├── booking/
-│   │   │   └── RoomBookingModal.tsx # Бронирование комнат
-│   │   ├── notifications/
-│   │   │   └── NotificationsModal.tsx # Уведомления и офлайн-кэш
-│   │   └── presentation/
-│   │       └── AllScreensView.tsx   # Режим презентации 4 экранов 2x2
-│   ├── App.tsx                      # Главный контейнер с переключателем режимов
-│   └── index.css                    # Tailwind CSS стили
+│   │   ├── auth/
+│   │   │   └── AuthModal.tsx        # Вход, Регистрация с выбором роли (Student / Teacher) и 1-клик демо-переключатель
+│   │   ├── teacher/
+│   │   │   ├── TeacherDashboard.tsx # Интерфейс преподавателя (Gradebook, Attendance, Deadlines, Rooms & Schedule)
+│   │   │   └── TeacherBottomNav.tsx # Нижняя навигация преподавателя
+│   │   ├── dashboard/               # Главный экран студента (GPA, Attendance, Schedule, Deadlines, Offline Save)
+│   │   ├── schedule/                # Интерактивное расписание + переход к кабинету на карте
+│   │   ├── grades/                  # Зачетная книжка студента, отзывы преподавателей (Feedback) и дедлайны
+│   │   └── map/                     # Интерактивная поэтажная карта кампуса AITU (C1.1, C1.2, C1.3 — 1, 2, 3 этажи)
+├── render.yaml                      # Render Blueprint для деплоя Backend + PostgreSQL + Web в 1 клик
+├── build-apk.bat                    # Скрипт автоматической сборки Android-приложения `UniCampus.apk`
+└── start-dev.bat                    # Запуск Backend API (порт 5000) + Frontend (порт 5173)
 ```
 
 ---
 
-## Запуск проекта
+## 2. Демо-аккаунты (Seed Data)
 
-1. Установите зависимости (если требуется):
+Пароль для всех предзаполненных аккаунтов: **`password123`** (также доступен мгновенный вход в 1 клик в окне **Sign In / Register** или переключатель **Student / Teacher** в верхней панели):
+
+| Роль | Email | ФИО | Группа / Кафедра |
+|------|-------|-----|------------------|
+| **Student** | `student@astanait.edu.kz` | Arystan Seitkaliyev | Группа `CS-2401` |
+| **Student** | `alisher@astanait.edu.kz` | Alisher Nurlanov | Группа `CS-2401` |
+| **Student** | `madina@astanait.edu.kz` | Madina Karimova | Группа `SE-2402` |
+| **Teacher** | `teacher@astanait.edu.kz` | Dr. Yersultan M. | Physics & Intelligent Systems (`PHYS101`, `CS101`) |
+| **Teacher** | `danial@astanait.edu.kz` | Prof. Danial R. | Mathematics & History (`MATH101`, `HIST102`) |
+
+---
+
+## 3. Функционал по Ролям
+
+### Интерфейс Студента (`role: 'student'`)
+- **Dashboard**: Приветствие, динамический расчёт **GPA (по 4.0 шкале)** на основе реальных оценок из БД, процент посещаемости (**Attendance Rate**), расписание на сегодня с кнопкой перехода на карту (`Map`), ближайшие дедлайны и объявления.
+- **Grades & Teacher Feedback**: Официальная ведомость оценок (`0–100`) по категориям (`Assignment`, `Midterm 1`, `Midterm 2`, `Final`) с персональными комментариями от преподавателей в реальном времени, а также доска заданий с фильтрацией и личными заметками.
+- **Schedule & Campus Map**: Недельная сетка расписания, добавление собственных пар с валидацией аудиторий AITU (`C1.1.320`, `C1.2.136`, `C1.3.246`) и интерактивная поэтажная карта корпусов.
+- **Offline Access (Офлайн-режим)**: Кнопка **Save Offline** сохраняет на устройство полное расписание (**Schedule**), интерактивную карту корпусов и кабинетов (**Map**) и все оценки с отзывами и GPA (**Grades**). При отсутствии сети приложение автоматически работает из локального офлайн-хранилища.
+
+### Интерфейс Преподавателя (`role: 'teacher'`)
+- **Interactive Gradebook**: Фильтрация по курсу (`PHYS101`, `MATH101`, `CS101`, `HIST102`) и группе (`CS-2401`, `SE-2402`); выставление и редактирование оценок (`0–100`) по категориям (`Assignment`, `Midterm 1`, `Midterm 2`, `Final`) и отправка комментариев (**Teacher Feedback**), которые мгновенно синхронизируются с БД и отображаются у студента.
+- **Attendance Tracker**: Отметка присутствия студентов (`Present`, `Late`, `Absent`) за выбранную дату и курс с пакетным сохранением в PostgreSQL.
+- **Task / Deadline Creator**: Публикация новых домашних заданий, квизов, рубежных контролей и экзаменов для конкретной группы студентов (`CS-2401`, `SE-2402` или `ALL`).
+- **Schedule & Room Management**: Просмотр расписания преподавателя и управление заявками студентов на бронирование аудиторий (**Approve / Reject**).
+
+---
+
+## 4. Локальный запуск (Backend + Frontend)
+
+1. Установите зависимости фронтенда и бэкенда:
    ```bash
    npm install
+   npm run backend:install
    ```
-
-2. Запустите локальный сервер разработки:
+2. Заполните базу данных демо-данными (если требуется сбросить к начальному состоянию):
    ```bash
+   npm run backend:seed
+   ```
+3. Запустите оба сервера (или дважды кликните `start-dev.bat` на Windows):
+   ```bash
+   # В первом терминале (Backend API на http://localhost:5000):
+   npm run backend:start
+
+   # Во втором терминале (Frontend на http://localhost:5173):
    npm run dev
    ```
 
-3. Откройте в браузере: `http://localhost:5173`
+---
+
+## 5. Пошаговый деплой на Render (`render.yaml`)
+
+В корне репозитория подготовлен файл **`render.yaml`** (Render Blueprint) для автоматического развертывания базы данных **Render PostgreSQL** (`unicampus-db`), облачного бэкенда **Web Service** (`unicampus-api`) и веб-интерфейса (`unicampus-web`).
+
+### Инструкция по деплою на Render:
+1. Загрузите изменения в ваш GitHub-репозиторий (`git push origin main`).
+2. Войдите в панель управления [Render Dashboard](https://dashboard.render.com/).
+3. Нажмите **New +** → **Blueprint**.
+4. Подключите ваш репозиторий `UniCampus`. Render автоматически обнаружит файл `render.yaml` и создаст:
+   - Базу данных PostgreSQL **`unicampus-db`** (Free Plan).
+   - Веб-сервис бэкенда **`unicampus-api`** (автоматически получит переменную `DATABASE_URL` от PostgreSQL и сгенерирует `JWT_SECRET`). При первом старте сервер автоматически создаст таблицы (`users`, `courses`, `grades`, `attendance`, `assignments`, `schedule`, `room_bookings`) и заполнит их демо-данными.
+   - Статический сайт **`unicampus-web`** для веб-версии.
+5. После завершения деплоя скопируйте HTTPS-ссылку вашего бэкенда (например, `https://unicampus-api.onrender.com/api`).
+
+> **Примечание о Render Cold Start**: На бесплатном тарифе Render сервер засыпает после 15 минут неактивности. Клиент UniCampus оснащён 60-секундным таймаутом (`RENDER_COLD_START_TIMEOUT_MS = 60000`) и автоматическим информационным баннером при пробуждении сервера, а также возможностью мгновенно переключиться в **Offline Mode**.
 
 ---
+
+## 6. Пересборка Android APK (`UniCampus.apk`) для работы с Render
+
+1. Укажите URL вашего Render-сервера в файле `.env` в корне проекта (или оставьте `https://unicampus-api.onrender.com/api` по умолчанию):
+   ```env
+   VITE_API_URL=https://unicampus-api.onrender.com/api
+   ```
+   *(Также URL сервера можно в любой момент изменить прямо внутри установленного APK в окне **Sign In / Register → Render API Config**).*
+2. Запустите сборку APK двойным кликом по **`build-apk.bat`** или командой:
+   ```powershell
+   .\build-apk.bat
+   ```
+3. Готовый установочный файл **`UniCampus.apk`** появится в корне папки проекта.

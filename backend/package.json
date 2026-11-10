@@ -1,0 +1,27 @@
+{
+  "name": "unicampus-backend",
+  "version": "1.0.0",
+  "description": "UniCampus Production REST API Backend (Node.js + Express + PostgreSQL/Prisma) for Render",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "seed": "node src/seed.js",
+    "prisma:generate": "npx prisma generate",
+    "prisma:push": "npx prisma db push"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "prisma": "^6.4.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

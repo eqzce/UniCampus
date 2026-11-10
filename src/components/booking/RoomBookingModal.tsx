@@ -3,26 +3,34 @@ import { useApp } from '../../context/AppContext';
 import { DoorClosed, X, CheckCircle2 } from 'lucide-react';
 
 export const RoomBookingModal: React.FC = () => {
-  const { isBookingOpen, setIsBookingOpen } = useApp();
-  const [selectedBuilding, setSelectedBuilding] = useState('Main Library');
+  const { isBookingOpen, setIsBookingOpen, createRoomBooking, roomBookings } = useApp();
+  const [selectedBuilding, setSelectedBuilding] = useState('AITU Main Library');
   const [selectedRoom, setSelectedRoom] = useState('Study Room B');
   const [timeSlot, setTimeSlot] = useState('14:00 - 16:00');
+  const [date, setDate] = useState('2026-10-28');
   const [purpose, setPurpose] = useState('Group study session for CS101');
   const [isBooked, setIsBooked] = useState(false);
 
   if (!isBookingOpen) return null;
 
-  const handleBook = () => {
+  const handleBook = async () => {
+    await createRoomBooking({
+      roomNumber: selectedRoom,
+      buildingName: selectedBuilding,
+      date,
+      timeSlot,
+      purpose,
+    });
     setIsBooked(true);
     setTimeout(() => {
       setIsBooked(false);
       setIsBookingOpen(false);
-    }, 1800);
+    }, 1500);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-5 border border-slate-100 relative">
+      <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-5 border border-slate-100 relative max-h-[88vh] overflow-y-auto">
         
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
@@ -32,7 +40,7 @@ export const RoomBookingModal: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">Room Booking</h3>
-              <p className="text-[10px] text-slate-400">Reserve study spaces and labs</p>
+              <p className="text-[10px] text-slate-400">Reserve study spaces & AITU classrooms</p>
             </div>
           </div>
           <button
@@ -52,7 +60,7 @@ export const RoomBookingModal: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
                 Select Campus Building
@@ -62,9 +70,10 @@ export const RoomBookingModal: React.FC = () => {
                 onChange={(e) => setSelectedBuilding(e.target.value)}
                 className="w-full text-xs border border-slate-200 rounded-xl p-2.5 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#18458b]/20"
               >
-                <option value="Main Library">Main Library</option>
-                <option value="Science Building">Science Building</option>
-                <option value="Student Center">Student Center</option>
+                <option value="AITU Main Library">AITU Main Library</option>
+                <option value="AITU Block C1.1">AITU Block C1.1</option>
+                <option value="AITU Block C1.2">AITU Block C1.2</option>
+                <option value="AITU Block C1.3">AITU Block C1.3</option>
               </select>
             </div>
 
@@ -79,8 +88,9 @@ export const RoomBookingModal: React.FC = () => {
               >
                 <option value="Study Room A">Study Room A (Cap. 6)</option>
                 <option value="Study Room B">Study Room B (Cap. 8)</option>
-                <option value="Room 301">Room 301 - Lab Area</option>
-                <option value="Room 204">Room 204 - Seminar</option>
+                <option value="C1.1.320">C1.1.320 - Physics Lab</option>
+                <option value="C1.2.136">C1.2.136 - Computer Hall</option>
+                <option value="C1.3.246">C1.3.246 - Seminar Room</option>
               </select>
             </div>
 
@@ -105,9 +115,12 @@ export const RoomBookingModal: React.FC = () => {
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
                   Date
                 </label>
-                <div className="text-xs border border-slate-200 rounded-xl p-2 bg-slate-50 text-slate-800 font-medium">
-                  Today (Oct 28)
-                </div>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full text-xs border border-slate-200 rounded-xl p-2 bg-slate-50 text-slate-800 font-medium"
+                />
               </div>
             </div>
 
@@ -124,6 +137,37 @@ export const RoomBookingModal: React.FC = () => {
               />
             </div>
 
+            {roomBookings.length > 0 && (
+              <div className="pt-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                  Recent Reservations ({roomBookings.length})
+                </span>
+                <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {roomBookings.slice(0, 3).map((b) => (
+                    <div
+                      key={b.id}
+                      className="flex items-center justify-between text-[10.5px] bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100"
+                    >
+                      <span className="font-semibold text-slate-700 truncate">
+                        {b.roomNumber} · {b.timeSlot}
+                      </span>
+                      <span
+                        className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded-full capitalize ${
+                          b.status === 'confirmed'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : b.status === 'rejected'
+                            ? 'bg-rose-100 text-rose-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {b.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="pt-2 flex gap-2">
               <button
                 onClick={() => setIsBookingOpen(false)}
@@ -133,7 +177,7 @@ export const RoomBookingModal: React.FC = () => {
               </button>
               <button
                 onClick={handleBook}
-                className="flex-1 text-xs font-bold py-2.5 rounded-xl bg-[#18458b] text-white hover:bg-blue-900 transition-all shadow-sm active:scale-95"
+                className="flex-1 text-xs font-bold py-2.5 rounded-xl bg-[#18458b] text-white hover:bg-blue-900 transition-all shadow-sm active:scale-95 cursor-pointer"
               >
                 Confirm Booking
               </button>

@@ -1,11 +1,37 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { X, Award, GraduationCap, Mail, IdCard, BookOpen, ShieldCheck } from 'lucide-react';
+import {
+  X,
+  Award,
+  GraduationCap,
+  Mail,
+  IdCard,
+  BookOpen,
+  ShieldCheck,
+  Briefcase,
+  LogIn,
+} from 'lucide-react';
 
 export const ProfileModal: React.FC = () => {
-  const { isProfileOpen, setIsProfileOpen, student } = useApp();
+  const {
+    isProfileOpen,
+    setIsProfileOpen,
+    student,
+    userRole,
+    currentUser,
+    switchDemoRole,
+    setIsAuthModalOpen,
+  } = useApp();
 
   if (!isProfileOpen) return null;
+
+  const isTeacher = userRole === 'teacher';
+  const initials = (currentUser?.full_name || student.fullName)
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
@@ -23,9 +49,13 @@ export const ProfileModal: React.FC = () => {
             <X className="w-4 h-4 stroke-[2.5]" />
           </button>
           <div className="flex items-center gap-2">
-            <GraduationCap className="w-5 h-5 text-sky-200" />
+            {isTeacher ? (
+              <Briefcase className="w-5 h-5 text-emerald-300" />
+            ) : (
+              <GraduationCap className="w-5 h-5 text-sky-200" />
+            )}
             <span className="text-xs font-semibold tracking-wider uppercase text-sky-100">
-              Student Profile
+              {isTeacher ? 'Faculty Teacher Profile' : 'Student Profile'}
             </span>
           </div>
           <p className="text-[11px] text-sky-200/90 mt-0.5">{student.university}</p>
@@ -33,78 +63,88 @@ export const ProfileModal: React.FC = () => {
 
         {/* Content Body with overlapping Avatar */}
         <div className="px-6 pb-6 pt-0 relative">
-          {/* Avatar and GPA Badge */}
+          {/* Avatar and GPA / Role Badge */}
           <div className="flex items-end justify-between -mt-10 mb-4">
             <div className="relative">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-400 via-sky-500 to-indigo-600 p-0.5 shadow-lg">
                 <div className="w-full h-full bg-[#18458b] rounded-[14px] flex items-center justify-center text-white font-black text-2xl shadow-inner tracking-wider">
-                  AS
+                  {initials}
                 </div>
               </div>
               <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></span>
             </div>
 
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/70 rounded-2xl px-3.5 py-1.5 text-right shadow-2xs">
-              <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1 justify-end">
-                <Award className="w-3 h-3 text-amber-500" />
-                <span>GPA</span>
+            {isTeacher ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-3.5 py-2 text-right shadow-2xs">
+                <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                  Role Access
+                </div>
+                <div className="text-sm font-black text-emerald-950">TEACHER</div>
               </div>
-              <div className="text-xl font-black text-slate-900 leading-tight">
-                {student.gpa}
-                <span className="text-[11px] font-normal text-slate-400"> / {student.maxGpa.toFixed(2)}</span>
+            ) : (
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/70 rounded-2xl px-3.5 py-1.5 text-right shadow-2xs">
+                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1 justify-end">
+                  <Award className="w-3 h-3 text-amber-500" />
+                  <span>GPA</span>
+                </div>
+                <div className="text-xl font-black text-slate-900 leading-tight">
+                  {student.gpa.toFixed(2)}
+                  <span className="text-[11px] font-normal text-slate-400">
+                    {' '}
+                    / {student.maxGpa.toFixed(2)}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Student Name (ФИО) & Major */}
+          {/* Name & Major / Department */}
           <div className="mb-4">
             <h3 className="text-lg font-bold text-slate-900 leading-tight">
-              {student.fullName}
+              {currentUser?.full_name || student.fullName}
             </h3>
             <p className="text-xs font-semibold text-blue-700 mt-0.5">
-              {student.major}
+              {isTeacher
+                ? currentUser?.department || 'Department of Physics & Intelligent Systems'
+                : `${student.major} · Group ${student.groupName || 'CS-2401'}`}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {student.academicYear} · {student.faculty}
+              {isTeacher ? 'Astana IT University Faculty' : `${student.academicYear} · ${student.faculty}`}
             </p>
           </div>
 
           {/* Details List */}
-          <div className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 space-y-2.5 mb-5 text-xs">
-            {/* Student ID */}
+          <div className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 space-y-2.5 mb-4 text-xs">
             <div className="flex items-center justify-between">
               <span className="text-slate-500 flex items-center gap-1.5">
                 <IdCard className="w-3.5 h-3.5 text-slate-400" />
-                Student ID
+                {isTeacher ? 'Faculty ID' : 'Student ID'}
               </span>
               <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded-md border border-slate-200/70 text-[11px]">
-                {student.studentId}
+                {isTeacher ? 'FAC-2024-0104' : student.studentId}
               </span>
             </div>
 
-            {/* Email */}
             <div className="flex items-center justify-between">
               <span className="text-slate-500 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-slate-400" />
                 Email
               </span>
               <span className="font-medium text-slate-700 text-[11px] truncate max-w-[170px]">
-                {student.email}
+                {currentUser?.email || student.email}
               </span>
             </div>
 
-            {/* Academic Standing */}
             <div className="flex items-center justify-between">
               <span className="text-slate-500 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                Status
+                {isTeacher ? 'Permissions' : 'Status'}
               </span>
               <span className="font-semibold text-emerald-700 text-[11px]">
-                {student.scholarshipStatus}
+                {isTeacher ? 'Gradebook & Attendance Admin' : student.scholarshipStatus}
               </span>
             </div>
 
-            {/* University */}
             <div className="flex items-center justify-between">
               <span className="text-slate-500 flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-slate-400" />
@@ -116,10 +156,44 @@ export const ProfileModal: React.FC = () => {
             </div>
           </div>
 
+          {/* Role Switcher & Auth Portal Buttons (Works in both Web and Mobile APK) */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <button
+              onClick={() => {
+                switchDemoRole(isTeacher ? 'student' : 'teacher');
+                setIsProfileOpen(false);
+              }}
+              className="flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors cursor-pointer"
+            >
+              {isTeacher ? (
+                <>
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>Student View</span>
+                </>
+              ) : (
+                <>
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>Teacher View</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                setIsProfileOpen(false);
+                setIsAuthModalOpen(true);
+              }}
+              className="flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#18458b] border border-blue-200 transition-colors cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In / Register</span>
+            </button>
+          </div>
+
           {/* Done Button */}
           <button
             onClick={() => setIsProfileOpen(false)}
-            className="w-full bg-[#18458b] hover:bg-[#14366d] active:scale-98 text-white font-semibold text-xs py-2.5 rounded-xl shadow-sm transition-all"
+            className="w-full bg-[#18458b] hover:bg-[#14366d] active:scale-98 text-white font-semibold text-xs py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
           >
             Close Profile
           </button>

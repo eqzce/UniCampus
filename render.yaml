@@ -1,0 +1,38 @@
+# Render Blueprint (render.yaml)
+# One-click deployment for UniCampus Backend REST API + Render PostgreSQL Database + Static Web App
+
+databases:
+  - name: unicampus-db
+    databaseName: unicampus
+    user: unicampus_user
+    plan: free
+
+services:
+  # 1. Node.js + Express + PostgreSQL REST API Backend
+  - type: web
+    name: unicampus-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: unicampus-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+
+  # 2. UniCampus Web Frontend (Static Site connected to unicampus-api)
+  - type: web
+    name: unicampus-web
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://unicampus-api.onrender.com/api

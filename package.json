@@ -1,14 +1,18 @@
 {
   "name": "unicampus",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "build:apk": "build-apk.bat"
+    "build:apk": "build-apk.bat",
+    "backend:install": "npm --prefix backend install",
+    "backend:start": "npm --prefix backend start",
+    "backend:dev": "npm --prefix backend run dev",
+    "backend:seed": "npm --prefix backend run seed"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
