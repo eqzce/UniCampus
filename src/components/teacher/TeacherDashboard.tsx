@@ -2,7 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { Header } from '../common/Header';
 import { useApp } from '../../context/AppContext';
 import { CampusMapScreen } from '../map/CampusMapScreen';
-import type { AssessmentCategory, AttendanceStatusType, TeacherTabType } from '../../types';
+import type {
+  AssessmentCategory,
+  AttendanceStatusType,
+  ScheduleItem,
+  TeacherTabType,
+} from '../../types';
 import {
   CalendarPlus,
   DoorOpen,
@@ -17,10 +22,27 @@ import {
   Users,
   Award,
   Sparkles,
+  Pencil,
 } from 'lucide-react';
 
 const GRADE_CATEGORIES = ['Assignment', 'Midterm 1', 'Midterm 2', 'Final'] as const;
 const STUDENT_GROUPS = ['ALL', 'CS-2401', 'SE-2402'] as const;
+const SCHEDULE_DAYS: ScheduleItem['day'][] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const SCHEDULE_TIME_SLOTS = [
+  { start: '09:00', end: '10:00', row: 0 },
+  { start: '10:00', end: '11:00', row: 1 },
+  { start: '11:00', end: '12:00', row: 2 },
+  { start: '12:00', end: '13:00', row: 3 },
+  { start: '13:00', end: '14:00', row: 4 },
+  { start: '14:00', end: '15:00', row: 5 },
+  { start: '15:00', end: '16:00', row: 6 },
+  { start: '16:00', end: '17:00', row: 7 },
+];
+const SCHEDULE_ROOMS = [
+  { room: 'C1.1.320', building: 'AITU Block C1.1' },
+  { room: 'C1.2.136', building: 'AITU Block C1.2' },
+  { room: 'C1.3.246', building: 'AITU Block C1.3' },
+];
 
 interface TeacherDashboardProps {
   forcedTab?: TeacherTabType;
@@ -41,6 +63,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
     submitTeacherAttendance,
     publishTeacherTask,
     removeAssignment,
+    updateScheduleClass,
+    removeScheduleItem,
     updateRoomBookingStatus,
     setIsBookingOpen,
     setIsAddScheduleOpen,
@@ -77,6 +101,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
   const [taskWeight, setTaskWeight] = useState('15%');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskToast, setTaskToast] = useState<string | null>(null);
+
+  // Schedule inline editor state
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [editCourseName, setEditCourseName] = useState('');
+  const [editCourseCode, setEditCourseCode] = useState('');
+  const [editDay, setEditDay] = useState<ScheduleItem['day']>('Mon');
+  const [editStartTime, setEditStartTime] = useState('10:00');
+  const [editRoom, setEditRoom] = useState('C1.1.320');
+  const [editGroupName, setEditGroupName] = useState('CS-2401');
+  const [scheduleToast, setScheduleToast] = useState<string | null>(null);
 
   const selectedCourseObj = useMemo(
     () => courses.find((c) => c.code === selectedCourseCode) || courses[0],
@@ -835,48 +869,244 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
               </div>
             </div>
 
-            {/* Teaching Schedule */}
+            {/* Teaching Schedule Management (Edit, Add & Delete Classes) */}
             <div className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 space-y-2.5">
+              {scheduleToast && (
+                <div className="bg-emerald-600 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{scheduleToast}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-slate-900">Teaching Schedule</h3>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900">
+                    Manage University Schedule ({scheduleItems.length} Classes)
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    Add, edit time/room, or delete classes — syncs immediately to Student Schedule
+                  </p>
+                </div>
                 <button
                   onClick={() => setIsAddScheduleOpen(true)}
-                  className="text-[11px] font-bold text-[#18458b] bg-blue-50 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                  className="text-[11px] font-bold bg-[#18458b] hover:bg-blue-800 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <Plus className="w-3 h-3" />
-                  <span>Add Lecture</span>
+                  <span>Add Class</span>
                 </button>
               </div>
 
               <div className="space-y-2">
-                {scheduleItems.map((cls) => (
-                  <div
-                    key={cls.id}
-                    className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-2 text-xs"
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-slate-900">
-                          {cls.day} {cls.startTime} · {cls.courseName}
-                        </span>
-                        <span className="text-[10px] font-semibold bg-white px-1.5 py-0.2 rounded border border-slate-200 text-slate-600">
-                          {cls.groupName || 'CS-2401'}
-                        </span>
-                      </div>
-                      <p className="text-[10.5px] text-slate-500 mt-0.5">
-                        {cls.room} ({cls.building}) · {cls.professor}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => navigateToClassroom(cls.room)}
-                      className="text-[10.5px] font-bold text-[#18458b] bg-white border border-blue-200 px-2.5 py-1 rounded-lg flex items-center gap-1 shrink-0 cursor-pointer"
+                {scheduleItems.map((cls) => {
+                  const isEditingCls = editingScheduleId === cls.id;
+                  return (
+                    <div
+                      key={cls.id}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2 text-xs"
                     >
-                      <MapPin className="w-3 h-3 text-blue-600" />
-                      <span>Map</span>
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900">
+                              {cls.day} {cls.startTime} · {cls.courseName}
+                            </span>
+                            <span className="text-[10px] font-semibold bg-white px-1.5 py-0.2 rounded border border-slate-200 text-slate-600">
+                              {cls.groupName || 'CS-2401'}
+                            </span>
+                          </div>
+                          <p className="text-[10.5px] text-slate-500 mt-0.5">
+                            {cls.room} ({cls.building}) · {cls.professor}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isEditingCls) {
+                                setEditingScheduleId(null);
+                              } else {
+                                setEditingScheduleId(cls.id);
+                                setEditCourseName(cls.courseName);
+                                setEditCourseCode(cls.courseCode);
+                                setEditDay(cls.day);
+                                setEditStartTime(cls.startTime);
+                                setEditRoom(cls.room);
+                                setEditGroupName(cls.groupName || 'CS-2401');
+                              }
+                            }}
+                            className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                            title="Edit schedule item"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            <span>{isEditingCls ? 'Close' : 'Edit'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigateToClassroom(cls.room)}
+                            className="text-[10.5px] font-bold text-[#18458b] bg-white border border-blue-200 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                            title="Show room on map"
+                          >
+                            <MapPin className="w-3 h-3 text-blue-600" />
+                            <span>Map</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              removeScheduleItem(cls.id);
+                              setScheduleToast(`Removed "${cls.courseName}" (${cls.day} ${cls.startTime})`);
+                              setTimeout(() => setScheduleToast(null), 2500);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                            title="Delete class from schedule"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isEditingCls && (
+                        <form
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            const slot =
+                              SCHEDULE_TIME_SLOTS.find((s) => s.start === editStartTime) ||
+                              SCHEDULE_TIME_SLOTS[1];
+                            const roomObj =
+                              SCHEDULE_ROOMS.find((r) => r.room === editRoom) || SCHEDULE_ROOMS[0];
+                            await updateScheduleClass(cls.id, {
+                              courseName: editCourseName.trim() || cls.courseName,
+                              courseCode: editCourseCode.trim() || cls.courseCode,
+                              day: editDay,
+                              startTime: slot.start,
+                              endTime: slot.end,
+                              timeRowIndex: slot.row,
+                              room: roomObj.room,
+                              building: roomObj.building,
+                              groupName: editGroupName,
+                            });
+                            setEditingScheduleId(null);
+                            setScheduleToast(
+                              `Updated "${editCourseName}" → ${editDay} ${slot.start} (${roomObj.room})`
+                            );
+                            setTimeout(() => setScheduleToast(null), 3000);
+                          }}
+                          className="bg-white border border-blue-200 rounded-xl p-2.5 space-y-2 animate-in fade-in duration-150"
+                        >
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Subject / Course
+                              </label>
+                              <select
+                                value={editCourseName}
+                                onChange={(e) => {
+                                  const selectedTitle = e.target.value;
+                                  setEditCourseName(selectedTitle);
+                                  const matched = courses.find((c) => c.title === selectedTitle);
+                                  if (matched) setEditCourseCode(matched.code);
+                                }}
+                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                              >
+                                {courses.map((c) => (
+                                  <option key={c.id} value={c.title}>
+                                    {c.code} · {c.title}
+                                  </option>
+                                ))}
+                                {!courses.some((c) => c.title === editCourseName) && (
+                                  <option value={editCourseName}>{editCourseName}</option>
+                                )}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Student Group
+                              </label>
+                              <select
+                                value={editGroupName}
+                                onChange={(e) => setEditGroupName(e.target.value)}
+                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                              >
+                                <option value="CS-2401">CS-2401</option>
+                                <option value="SE-2402">SE-2402</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Day
+                              </label>
+                              <select
+                                value={editDay}
+                                onChange={(e) => setEditDay(e.target.value as ScheduleItem['day'])}
+                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                              >
+                                {SCHEDULE_DAYS.map((d) => (
+                                  <option key={d} value={d}>
+                                    {d}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Time
+                              </label>
+                              <select
+                                value={editStartTime}
+                                onChange={(e) => setEditStartTime(e.target.value)}
+                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                              >
+                                {SCHEDULE_TIME_SLOTS.map((s) => (
+                                  <option key={s.start} value={s.start}>
+                                    {s.start} - {s.end}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Classroom
+                              </label>
+                              <select
+                                value={editRoom}
+                                onChange={(e) => setEditRoom(e.target.value)}
+                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                              >
+                                {SCHEDULE_ROOMS.map((r) => (
+                                  <option key={r.room} value={r.room}>
+                                    {r.room}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end gap-1.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditingScheduleId(null)}
+                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="text-[11px] font-bold px-3 py-1 rounded-lg bg-[#18458b] text-white cursor-pointer"
+                            >
+                              Save Schedule Changes
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

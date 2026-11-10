@@ -1,56 +1,61 @@
 const bcrypt = require('bcryptjs');
 
 function createInitialSeedData() {
-  const passwordHash = bcrypt.hashSync('password123', 10);
+  const studentHash = bcrypt.hashSync('student123', 10);
+  const teacherHash = bcrypt.hashSync('teacher123', 10);
+  const adminHash = bcrypt.hashSync('admin123', 10);
   const now = new Date().toISOString();
 
   const users = [
-    // Teachers
+    // 1. Primary Test Admin Account
+    {
+      id: 'usr-admin-1',
+      email: 'admin@unicampus.kz',
+      password_hash: adminHash,
+      full_name: 'Aidar K. (System Admin)',
+      role: 'admin',
+      group_name: null,
+      department: 'University Academic Affairs & IT Administration',
+      created_at: now,
+    },
+    // 2. Primary Test Teacher Account
     {
       id: 'usr-teacher-1',
-      email: 'teacher@astanait.edu.kz',
-      password_hash: passwordHash,
+      email: 'teacher@unicampus.kz',
+      password_hash: teacherHash,
       full_name: 'Dr. Yersultan M.',
       role: 'teacher',
       group_name: null,
       department: 'Department of Physics & Intelligent Systems',
       created_at: now,
     },
+    // Secondary Teacher (for assigning different teachers to subjects in Admin view)
     {
       id: 'usr-teacher-2',
-      email: 'danial@astanait.edu.kz',
-      password_hash: passwordHash,
+      email: 'danial@unicampus.kz',
+      password_hash: teacherHash,
       full_name: 'Prof. Danial R.',
       role: 'teacher',
       group_name: null,
       department: 'Department of Mathematics & Computer Science',
       created_at: now,
     },
-    // Students
+    // 3. Primary Test Student Account
     {
       id: 'usr-student-1',
-      email: 'student@astanait.edu.kz',
-      password_hash: passwordHash,
+      email: 'student@unicampus.kz',
+      password_hash: studentHash,
       full_name: 'Arystan Seitkaliyev',
       role: 'student',
       group_name: 'CS-2401',
       department: null,
       created_at: now,
     },
-    {
-      id: 'usr-student-2',
-      email: 'a.seitkaliyev@astanait.edu.kz',
-      password_hash: passwordHash,
-      full_name: 'Arystan Seitkaliyev',
-      role: 'student',
-      group_name: 'CS-2401',
-      department: null,
-      created_at: now,
-    },
+    // Additional students in database for Teacher & Admin gradebook/attendance
     {
       id: 'usr-student-3',
-      email: 'alisher@astanait.edu.kz',
-      password_hash: passwordHash,
+      email: 'alisher@unicampus.kz',
+      password_hash: studentHash,
       full_name: 'Alisher Nurlanov',
       role: 'student',
       group_name: 'CS-2401',
@@ -59,8 +64,8 @@ function createInitialSeedData() {
     },
     {
       id: 'usr-student-4',
-      email: 'dana@astanait.edu.kz',
-      password_hash: passwordHash,
+      email: 'dana@unicampus.kz',
+      password_hash: studentHash,
       full_name: 'Dana Suleimenova',
       role: 'student',
       group_name: 'CS-2401',
@@ -69,8 +74,8 @@ function createInitialSeedData() {
     },
     {
       id: 'usr-student-5',
-      email: 'madina@astanait.edu.kz',
-      password_hash: passwordHash,
+      email: 'madina@unicampus.kz',
+      password_hash: studentHash,
       full_name: 'Madina Karimova',
       role: 'student',
       group_name: 'SE-2402',
@@ -79,8 +84,8 @@ function createInitialSeedData() {
     },
     {
       id: 'usr-student-6',
-      email: 'timur@astanait.edu.kz',
-      password_hash: passwordHash,
+      email: 'timur@unicampus.kz',
+      password_hash: studentHash,
       full_name: 'Timur Bekzhanov',
       role: 'student',
       group_name: 'SE-2402',
@@ -121,7 +126,7 @@ function createInitialSeedData() {
   ];
 
   const grades = [
-    // Arystan (usr-student-1 & usr-student-2)
+    // Arystan (usr-student-1)
     {
       id: 'grd-1',
       student_id: 'usr-student-1',
@@ -180,27 +185,6 @@ function createInitialSeedData() {
       category: 'Assignment',
       score: 95,
       feedback: 'Deep primary-source analysis on 20th century modernization.',
-      updated_at: now,
-    },
-    // Mirror grades for a.seitkaliyev@astanait.edu.kz
-    {
-      id: 'grd-2a',
-      student_id: 'usr-student-2',
-      course_id: 'crs-phys101',
-      teacher_id: 'usr-teacher-1',
-      category: 'Assignment',
-      score: 95,
-      feedback: 'Excellent friction & kinematics lab analysis.',
-      updated_at: now,
-    },
-    {
-      id: 'grd-2b',
-      student_id: 'usr-student-2',
-      course_id: 'crs-math101',
-      teacher_id: 'usr-teacher-2',
-      category: 'Midterm 1',
-      score: 94,
-      feedback: 'Outstanding matrix eigenvalue proofs!',
       updated_at: now,
     },
     // Alisher (usr-student-3)

@@ -131,7 +131,7 @@ async function seedPostgresIfNeeded(pool, force = false) {
       return;
     }
 
-    console.log('[DB] Seeding PostgreSQL database with demo Student & Teacher accounts...');
+    console.log('[DB] Seeding PostgreSQL database with demo Student, Teacher & Admin accounts...');
     const seed = createInitialSeedData();
 
     await client.query('BEGIN');
@@ -271,7 +271,6 @@ async function initDatabase(forceSeed = false) {
   return { engine: 'local-json' };
 }
 
-// Helper to convert 0-100 score to 4.0 GPA scale (AITU standard grading scale)
 function scoreToGpaPoints(score) {
   if (score >= 95) return 4.0;
   if (score >= 90) return 3.67;
@@ -337,16 +336,17 @@ const db = {
   },
 
   async createUser({ email, password_hash, full_name, role, group_name, department }) {
-    const id = `usr-${role}-${Date.now()}`;
+    const validRole = ['student', 'teacher', 'admin'].includes(role) ? role : 'student';
+    const id = `usr-${validRole}-${Date.now()}`;
     const created_at = new Date().toISOString();
     const user = {
       id,
       email: email.trim().toLowerCase(),
       password_hash,
       full_name: full_name.trim(),
-      role: role === 'teacher' ? 'teacher' : 'student',
-      group_name: role === 'student' ? (group_name || 'CS-2401') : null,
-      department: role === 'teacher' ? (department || 'Computer Science & Software Engineering') : null,
+      role: validRole,
+      group_name: validRole === 'student' ? (group_name || 'CS-2401') : null,
+      department: validRole !== 'student' ? (department || 'Computer Science & Software Engineering') : null,
       created_at,
     };
 
@@ -395,6 +395,19 @@ const db = {
       .map(({ password_hash: _password_hash, ...rest }) => rest);
   },
 
+  async getTeachers() {
+    if (usingPostgres) {
+      const { rows } = await pgPool.query(
+        `SELECT id, email, full_name, role, department, created_at FROM users WHERE role = 'teacher' ORDER BY full_name ASC`
+      );
+      return rows;
+    }
+    const store = ensureLocalStore();
+    return store.users
+      .filter((u) => u.role === 'teacher')
+      .map(({ password_hash: _password_hash, ...rest }) => rest);
+  },
+
   async getCourses() {
     if (usingPostgres) {
       const { rows } = await pgPool.query(
@@ -410,6 +423,105 @@ const db = {
       const teacher = store.users.find((u) => u.id === c.teacher_id);
       return { ...c, teacher_name: teacher ? teacher.full_name : 'University Professor' };
     });
+  },
+
+  async createCourse({ title, code, credits, teacher_id }) {
+    const cleanCode = String(code || '')
+      .trim()
+      .toUpperCase();
+    const id = `crs-${cleanCode.toLowerCase()}-${Date.now().toString().slice(-4)}`;
+    const record = {
+      id,
+      title: String(title || '').trim(),
+      code: cleanCode,
+      credits: Number(credits) || 5,
+      teacher_id: teacher_id || 'usr-teacher-1',
+    };
+
+    if (usingPostgres) {
+      await pgPool.query(
+        `INSERT INTO courses (id, title, code, credits, teacher_id)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (code) DO UPDATE SET title = EXCLUDED.title, credits = EXCLUDED.credits, teacher_id = EXCLUDED.teacher_id`,
+        [record.id, record.title, record.code, record.credits, record.teacher_id]
+      );
+      const courses = await this.getCourses();
+      return courses.find((c) => c.code === cleanCode);
+    }
+
+    const store = ensureLocalStore();
+    const existing = store.courses.find((c) => c.code.toUpperCase() === cleanCode);
+    if (existing) {
+      existing.title = record.title;
+      existing.credits = record.credits;
+      existing.teacher_id = record.teacher_id;
+    } else {
+      store.courses.push(record);
+    }
+    saveLocalStore();
+    const courses = await this.getCourses();
+    return courses.find((c) => c.code === cleanCode);
+  },
+
+  async updateCourse(id, { title, code, credits, teacher_id }) {
+    if (usingPostgres) {
+      const current = await pgPool.query('SELECT * FROM courses WHERE id = $1 OR code = $1 LIMIT 1', [id]);
+      if (current.rows.length === 0) return null;
+      const target = current.rows[0];
+      const nextTitle = title ? title.trim() : target.title;
+      const nextCode = code ? code.trim().toUpperCase() : target.code;
+      const nextCredits = credits !== undefined ? Number(credits) : target.credits;
+      const nextTeacher = teacher_id || target.teacher_id;
+
+      await pgPool.query(
+        `UPDATE courses SET title = $1, code = $2, credits = $3, teacher_id = $4 WHERE id = $5`,
+        [nextTitle, nextCode, nextCredits, nextTeacher, target.id]
+      );
+
+      // Update schedule professor name if teacher was reassigned
+      const teacherRow = await this.findUserById(nextTeacher);
+      if (teacherRow) {
+        await pgPool.query(
+          `UPDATE schedule SET professor = $1 WHERE course_id = $2 OR course_code = $3`,
+          [teacherRow.full_name, target.id, nextCode]
+        );
+      }
+
+      const courses = await this.getCourses();
+      return courses.find((c) => c.id === target.id);
+    }
+
+    const store = ensureLocalStore();
+    const course = store.courses.find((c) => c.id === id || c.code === id);
+    if (!course) return null;
+    if (title) course.title = title.trim();
+    if (code) course.code = code.trim().toUpperCase();
+    if (credits !== undefined) course.credits = Number(credits);
+    if (teacher_id) {
+      course.teacher_id = teacher_id;
+      const teacher = store.users.find((u) => u.id === teacher_id);
+      if (teacher) {
+        store.schedule.forEach((s) => {
+          if (s.course_id === course.id || s.course_code.startsWith(course.code)) {
+            s.professor = teacher.full_name;
+          }
+        });
+      }
+    }
+    saveLocalStore();
+    const courses = await this.getCourses();
+    return courses.find((c) => c.id === course.id);
+  },
+
+  async deleteCourse(id) {
+    if (usingPostgres) {
+      await pgPool.query('DELETE FROM courses WHERE id = $1 OR code = $1', [id]);
+      return true;
+    }
+    const store = ensureLocalStore();
+    store.courses = store.courses.filter((c) => c.id !== id && c.code !== id);
+    saveLocalStore();
+    return true;
   },
 
   async getGrades({ studentId, courseId, groupName } = {}) {
@@ -477,7 +589,6 @@ const db = {
     const numericScore = Math.max(0, Math.min(100, Number(score)));
 
     if (usingPostgres) {
-      // Check if a grade for this student + course + category already exists
       const existing = id
         ? await pgPool.query('SELECT id FROM grades WHERE id = $1', [id])
         : await pgPool.query(
@@ -798,6 +909,67 @@ const db = {
     return record;
   },
 
+  async updateScheduleItem(id, item) {
+    if (usingPostgres) {
+      const existing = await pgPool.query('SELECT * FROM schedule WHERE id = $1 LIMIT 1', [id]);
+      if (existing.rows.length === 0) return null;
+      const cur = existing.rows[0];
+      const updated = {
+        course_name: item.courseName || item.course_name || cur.course_name,
+        course_code: item.courseCode || item.course_code || cur.course_code,
+        professor: item.professor || cur.professor,
+        group_name: item.groupName || item.group_name || cur.group_name,
+        day: item.day || cur.day,
+        start_time: item.startTime || item.start_time || cur.start_time,
+        end_time: item.endTime || item.end_time || cur.end_time,
+        time_row_index: Number(item.timeRowIndex ?? item.time_row_index ?? cur.time_row_index),
+        room: item.room || cur.room,
+        building: item.building || cur.building,
+        color: item.color || cur.color,
+      };
+      const { rows } = await pgPool.query(
+        `UPDATE schedule
+         SET course_name = $1, course_code = $2, professor = $3, group_name = $4, day = $5,
+             start_time = $6, end_time = $7, time_row_index = $8, room = $9, building = $10, color = $11
+         WHERE id = $12 RETURNING *`,
+        [
+          updated.course_name,
+          updated.course_code,
+          updated.professor,
+          updated.group_name,
+          updated.day,
+          updated.start_time,
+          updated.end_time,
+          updated.time_row_index,
+          updated.room,
+          updated.building,
+          updated.color,
+          id,
+        ]
+      );
+      return rows[0];
+    }
+
+    const store = ensureLocalStore();
+    const s = store.schedule.find((it) => it.id === id);
+    if (!s) return null;
+    if (item.courseName || item.course_name) s.course_name = item.courseName || item.course_name;
+    if (item.courseCode || item.course_code) s.course_code = item.courseCode || item.course_code;
+    if (item.professor) s.professor = item.professor;
+    if (item.groupName || item.group_name) s.group_name = item.groupName || item.group_name;
+    if (item.day) s.day = item.day;
+    if (item.startTime || item.start_time) s.start_time = item.startTime || item.start_time;
+    if (item.endTime || item.end_time) s.end_time = item.endTime || item.end_time;
+    if (item.timeRowIndex !== undefined || item.time_row_index !== undefined) {
+      s.time_row_index = Number(item.timeRowIndex ?? item.time_row_index);
+    }
+    if (item.room) s.room = item.room;
+    if (item.building) s.building = item.building;
+    if (item.color) s.color = item.color;
+    saveLocalStore();
+    return s;
+  },
+
   async deleteScheduleItem(id) {
     if (usingPostgres) {
       await pgPool.query('DELETE FROM schedule WHERE id = $1', [id]);
@@ -831,7 +1003,7 @@ const db = {
       date: date || new Date().toISOString().slice(0, 10),
       time_slot: time_slot || '14:00 - 16:00',
       purpose: purpose || 'Group study session',
-      status: status || (user_role === 'teacher' ? 'confirmed' : 'pending'),
+      status: status || (user_role === 'teacher' || user_role === 'admin' ? 'confirmed' : 'pending'),
       created_at,
     };
 

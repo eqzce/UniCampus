@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import type {
   TabType,
   TeacherTabType,
+  AdminTabType,
   Assignment,
   AssignmentStatus,
   ScheduleItem,
@@ -78,6 +79,8 @@ interface AppContextType {
   setActiveTab: (tab: TabType) => void;
   teacherActiveTab: TeacherTabType;
   setTeacherActiveTab: (tab: TeacherTabType) => void;
+  adminActiveTab: AdminTabType;
+  setAdminActiveTab: (tab: AdminTabType) => void;
   selectedRoomForNav: string | null;
   roomNavTimestamp: number;
   navigateToClassroom: (room: string) => void;
@@ -132,6 +135,7 @@ interface AppContextType {
     item: Omit<ScheduleItem, 'id'>,
     homework?: { title: string; dueDate?: string; daysLeft?: number }
   ) => ScheduleItem;
+  updateScheduleClass: (id: string, payload: Partial<Omit<ScheduleItem, 'id'>>) => Promise<void>;
   removeScheduleItem: (id: string) => void;
   clearAllSchedule: () => void;
   resetDefaultSchedule: () => void;
@@ -153,12 +157,34 @@ interface AppContextType {
   toggleAssignmentStatus: (id: string) => void;
   addPersonalNote: (id: string, note: string) => void;
 
-  // Live Grades, Attendance, Courses, Students, Bookings
+  // Live Grades, Attendance, Courses, Teachers, Students, Bookings
   courses: CourseRecord[];
+  teachersList: AuthUser[];
   studentsList: AuthUser[];
   grades: GradeRecord[];
   attendance: AttendanceRecord[];
   roomBookings: RoomBooking[];
+  createSubject: (payload: {
+    title: string;
+    code: string;
+    credits: number;
+    teacher_id: string;
+  }) => Promise<CourseRecord>;
+  updateSubject: (
+    id: string,
+    payload: {
+      title?: string;
+      code?: string;
+      credits?: number;
+      teacher_id?: string;
+    }
+  ) => Promise<void>;
+  deleteSubject: (id: string) => Promise<void>;
+  createTeacherAccount: (payload: {
+    full_name: string;
+    email: string;
+    department?: string;
+  }) => Promise<AuthUser>;
   submitTeacherGrade: (payload: {
     id?: string;
     student_id: string;
@@ -204,7 +230,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const DEFAULT_DEMO_STUDENT: AuthUser = {
   id: 'usr-student-1',
-  email: 'student@astanait.edu.kz',
+  email: 'student@unicampus.kz',
   full_name: 'Arystan Seitkaliyev',
   role: 'student',
   group_name: 'CS-2401',
@@ -213,10 +239,18 @@ const DEFAULT_DEMO_STUDENT: AuthUser = {
 
 const DEFAULT_DEMO_TEACHER: AuthUser = {
   id: 'usr-teacher-1',
-  email: 'teacher@astanait.edu.kz',
+  email: 'teacher@unicampus.kz',
   full_name: 'Dr. Yersultan M.',
   role: 'teacher',
   department: 'Department of Physics & Intelligent Systems',
+};
+
+const DEFAULT_DEMO_ADMIN: AuthUser = {
+  id: 'usr-admin-1',
+  email: 'admin@unicampus.kz',
+  full_name: 'Aidar K. (System Admin)',
+  role: 'admin',
+  department: 'Academic Affairs & Registry',
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -230,6 +264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [teacherActiveTab, setTeacherActiveTab] = useState<TeacherTabType>('gradebook');
+  const [adminActiveTab, setAdminActiveTab] = useState<AdminTabType>('courses');
 
   const [selectedRoomForNav, setSelectedRoomForNav] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('room')
@@ -242,6 +277,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Auth & Role
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     const urlRole = new URLSearchParams(window.location.search).get('role');
+    if (urlRole === 'admin') return DEFAULT_DEMO_ADMIN;
     if (urlRole === 'teacher') return DEFAULT_DEMO_TEACHER;
     if (urlRole === 'student') return DEFAULT_DEMO_STUDENT;
     return getStoredUser() || DEFAULT_DEMO_STUDENT;
@@ -278,12 +314,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Data states initialized from offline cache / localStorage
   const [courses, setCourses] = useState<CourseRecord[]>(cachedSnapshot.courses || DEFAULT_OFFLINE_COURSES);
+  const [teachersList, setTeachersList] = useState<AuthUser[]>([
+    DEFAULT_DEMO_TEACHER,
+    {
+      id: 'usr-teacher-2',
+      email: 'danial@unicampus.kz',
+      full_name: 'Prof. Danial R.',
+      role: 'teacher',
+      department: 'Department of Computer Science & Mathematics',
+    },
+  ]);
   const [studentsList, setStudentsList] = useState<AuthUser[]>([
     DEFAULT_DEMO_STUDENT,
-    { id: 'usr-student-3', email: 'alisher@astanait.edu.kz', full_name: 'Alisher Nurlanov', role: 'student', group_name: 'CS-2401', gpa: 3.25 },
-    { id: 'usr-student-4', email: 'dana@astanait.edu.kz', full_name: 'Dana Suleimenova', role: 'student', group_name: 'CS-2401', gpa: 3.92 },
-    { id: 'usr-student-5', email: 'madina@astanait.edu.kz', full_name: 'Madina Karimova', role: 'student', group_name: 'SE-2402', gpa: 3.67 },
-    { id: 'usr-student-6', email: 'timur@astanait.edu.kz', full_name: 'Timur Bekzhanov', role: 'student', group_name: 'SE-2402', gpa: 2.85 },
+    { id: 'usr-student-2', email: 'alisher@unicampus.kz', full_name: 'Alisher Nurlanov', role: 'student', group_name: 'CS-2401', gpa: 3.25 },
+    { id: 'usr-student-3', email: 'dana@unicampus.kz', full_name: 'Dana Suleimenova', role: 'student', group_name: 'CS-2401', gpa: 3.92 },
+    { id: 'usr-student-4', email: 'madina@unicampus.kz', full_name: 'Madina Karimova', role: 'student', group_name: 'SE-2402', gpa: 3.67 },
+    { id: 'usr-student-5', email: 'timur@unicampus.kz', full_name: 'Timur Bekzhanov', role: 'student', group_name: 'SE-2402', gpa: 2.85 },
   ]);
   const [grades, setGrades] = useState<GradeRecord[]>(cachedSnapshot.grades || DEFAULT_OFFLINE_GRADES);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(
@@ -382,6 +428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setBackendConnected(true);
 
       if (data.courses.length > 0) setCourses(data.courses);
+      if (data.teachers && data.teachers.length > 0) setTeachersList(data.teachers);
       if (data.students && data.students.length > 0) setStudentsList(data.students);
       if (data.grades.length > 0) setGrades(data.grades);
       if (data.attendance.length > 0) setAttendance(data.attendance);
@@ -453,7 +500,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       // Offline / Demo fallback if local backend isn't running yet
       const lower = email.trim().toLowerCase();
-      if (lower.includes('teacher') || lower.includes('yersultan') || lower.includes('danial')) {
+      if (lower.includes('admin') && (password === 'admin123' || password === 'password123')) {
+        const demoAdmin: AuthUser = {
+          ...DEFAULT_DEMO_ADMIN,
+          email: lower,
+        };
+        setStoredAuth('offline-demo-token-admin', demoAdmin);
+        setCurrentUser(demoAdmin);
+        return demoAdmin;
+      }
+      if (
+        (lower.includes('teacher') || lower.includes('yersultan') || lower.includes('danial')) &&
+        (password === 'teacher123' || password === 'password123')
+      ) {
         const demoTeacher: AuthUser = {
           ...DEFAULT_DEMO_TEACHER,
           email: lower,
@@ -463,7 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser(demoTeacher);
         return demoTeacher;
       }
-      if (password === 'password123') {
+      if (password === 'student123' || password === 'password123') {
         const demoStudent: AuthUser = {
           ...DEFAULT_DEMO_STUDENT,
           email: lower,
@@ -498,26 +557,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         full_name: payload.full_name.trim(),
         role: payload.role,
         group_name: payload.role === 'student' ? payload.group_name || 'CS-2401' : null,
-        department: payload.role === 'teacher' ? payload.department || 'Computer Science' : null,
+        department: payload.role !== 'student' ? payload.department || 'Computer Science' : null,
         gpa: 3.78,
       };
       setStoredAuth(`offline-token-${Date.now()}`, fallbackUser);
       setCurrentUser(fallbackUser);
       if (payload.role === 'student') {
         setStudentsList((prev) => [...prev, fallbackUser]);
+      } else if (payload.role === 'teacher') {
+        setTeachersList((prev) => [...prev, fallbackUser]);
       }
       return fallbackUser;
     }
   };
 
   const switchDemoRole = async (role: UserRole) => {
-    const targetEmail = role === 'teacher' ? 'teacher@astanait.edu.kz' : 'student@astanait.edu.kz';
+    const creds =
+      role === 'admin'
+        ? { email: 'admin@unicampus.kz', pass: 'admin123', fallback: DEFAULT_DEMO_ADMIN }
+        : role === 'teacher'
+        ? { email: 'teacher@unicampus.kz', pass: 'teacher123', fallback: DEFAULT_DEMO_TEACHER }
+        : { email: 'student@unicampus.kz', pass: 'student123', fallback: DEFAULT_DEMO_STUDENT };
     try {
-      await loginWithCredentials(targetEmail, 'password123');
+      await loginWithCredentials(creds.email, creds.pass);
     } catch {
-      const fallback = role === 'teacher' ? DEFAULT_DEMO_TEACHER : DEFAULT_DEMO_STUDENT;
-      setStoredAuth(`demo-token-${role}`, fallback);
-      setCurrentUser(fallback);
+      setStoredAuth(`demo-token-${role}`, creds.fallback);
+      setCurrentUser(creds.fallback);
     }
   };
 
@@ -535,7 +600,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const navigateToClassroom = (room: string) => {
     setSelectedRoomForNav(room);
     setRoomNavTimestamp(Date.now());
-    if (userRole === 'teacher') {
+    if (userRole === 'admin') {
+      setAdminActiveTab('map');
+    } else if (userRole === 'teacher') {
       setTeacherActiveTab('map');
     } else {
       setActiveTab('map');
@@ -613,6 +680,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return created;
   };
 
+  const updateScheduleClass = async (
+    id: string,
+    payload: Partial<Omit<ScheduleItem, 'id'>>
+  ): Promise<void> => {
+    setScheduleItems((prev) => {
+      const next = prev.map((it) => (it.id === id ? { ...it, ...payload } : it));
+      OfflineStorage.saveSnapshot({ schedule: next });
+      return next;
+    });
+
+    if (!isOfflineMode) {
+      try {
+        const updated = await ApiService.updateScheduleItem(id, payload);
+        setScheduleItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
+      } catch {
+        // Optimistic update already saved
+      }
+    }
+  };
+
   const removeScheduleItem = (id: string) => {
     setScheduleItems((prev) => prev.filter((item) => item.id !== id));
     if (!isOfflineMode) {
@@ -656,6 +743,150 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return item;
       })
     );
+  };
+
+  // Admin Actions: Create / Update / Delete Subject & Bind Teachers
+  const createSubject = async (payload: {
+    title: string;
+    code: string;
+    credits: number;
+    teacher_id: string;
+  }): Promise<CourseRecord> => {
+    const teacherObj = teachersList.find((t) => t.id === payload.teacher_id);
+    const optimistic: CourseRecord = {
+      id: `crs-${Date.now()}`,
+      title: payload.title.trim(),
+      code: payload.code.trim().toUpperCase(),
+      credits: Number(payload.credits) || 5,
+      teacher_id: payload.teacher_id,
+      teacher_name: teacherObj?.full_name || 'Dr. Yersultan M.',
+    };
+
+    setCourses((prev) => {
+      const next = [...prev, optimistic];
+      OfflineStorage.saveSnapshot({ courses: next });
+      return next;
+    });
+
+    if (!isOfflineMode) {
+      try {
+        const created = await ApiService.createCourse(payload);
+        setCourses((prev) => prev.map((c) => (c.id === optimistic.id ? created : c)));
+        return created;
+      } catch {
+        // Optimistic update kept
+      }
+    }
+    return optimistic;
+  };
+
+  const updateSubject = async (
+    id: string,
+    payload: {
+      title?: string;
+      code?: string;
+      credits?: number;
+      teacher_id?: string;
+    }
+  ): Promise<void> => {
+    const teacherObj = payload.teacher_id
+      ? teachersList.find((t) => t.id === payload.teacher_id)
+      : undefined;
+
+    setCourses((prev) => {
+      const next = prev.map((c) => {
+        if (c.id !== id) return c;
+        return {
+          ...c,
+          title: payload.title !== undefined ? payload.title.trim() : c.title,
+          code: payload.code !== undefined ? payload.code.trim().toUpperCase() : c.code,
+          credits: payload.credits !== undefined ? Number(payload.credits) : c.credits,
+          teacher_id: payload.teacher_id !== undefined ? payload.teacher_id : c.teacher_id,
+          teacher_name: teacherObj ? teacherObj.full_name : c.teacher_name,
+        };
+      });
+      OfflineStorage.saveSnapshot({ courses: next });
+      return next;
+    });
+
+    // If a teacher was bound to this subject, also update matching schedule items professor name
+    if (teacherObj) {
+      const targetCourse = courses.find((c) => c.id === id);
+      if (targetCourse) {
+        setScheduleItems((prev) =>
+          prev.map((item) =>
+            item.courseCode.startsWith(targetCourse.code) || item.courseName === targetCourse.title
+              ? { ...item, professor: teacherObj.full_name }
+              : item
+          )
+        );
+      }
+    }
+
+    if (!isOfflineMode) {
+      try {
+        const updated = await ApiService.updateCourse(id, payload);
+        setCourses((prev) => prev.map((c) => (c.id === id ? updated : c)));
+      } catch {
+        // Optimistic update kept
+      }
+    }
+  };
+
+  const deleteSubject = async (id: string): Promise<void> => {
+    setCourses((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      OfflineStorage.saveSnapshot({ courses: next });
+      return next;
+    });
+
+    if (!isOfflineMode) {
+      try {
+        await ApiService.deleteCourse(id);
+      } catch {
+        // Optimistic removal kept
+      }
+    }
+  };
+
+  const createTeacherAccount = async (payload: {
+    full_name: string;
+    email: string;
+    department?: string;
+  }): Promise<AuthUser> => {
+    const newTeacher: AuthUser = {
+      id: `usr-teacher-${Date.now()}`,
+      email: payload.email.trim().toLowerCase(),
+      full_name: payload.full_name.trim(),
+      role: 'teacher',
+      department: payload.department?.trim() || 'Department of Computer Science',
+    };
+
+    setTeachersList((prev) => [...prev, newTeacher]);
+
+    if (!isOfflineMode) {
+      try {
+        // Register teacher on backend without overwriting current Admin session
+        const prevToken = getStoredToken();
+        const prevUser = getStoredUser();
+        const res = await ApiService.register({
+          email: newTeacher.email,
+          password: 'teacher123',
+          full_name: newTeacher.full_name,
+          role: 'teacher',
+          department: newTeacher.department || 'Computer Science',
+        });
+        if (prevToken && prevUser) {
+          setStoredAuth(prevToken, prevUser);
+        }
+        setTeachersList((prev) => prev.map((t) => (t.id === newTeacher.id ? res.user : t)));
+        return res.user;
+      } catch {
+        // Keep local teacher
+      }
+    }
+
+    return newTeacher;
   };
 
   // Teacher Actions (with immediate local state update + PostgreSQL backend sync)
@@ -941,6 +1172,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab,
         teacherActiveTab,
         setTeacherActiveTab,
+        adminActiveTab,
+        setAdminActiveTab,
         selectedRoomForNav,
         roomNavTimestamp,
         navigateToClassroom,
@@ -975,6 +1208,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAddScheduleOpen,
         scheduleItems,
         addScheduleItem,
+        updateScheduleClass,
         removeScheduleItem,
         clearAllSchedule,
         resetDefaultSchedule,
@@ -988,10 +1222,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleAssignmentStatus,
         addPersonalNote,
         courses,
+        teachersList,
         studentsList,
         grades,
         attendance,
         roomBookings,
+        createSubject,
+        updateSubject,
+        deleteSubject,
+        createTeacherAccount,
         submitTeacherGrade,
         submitTeacherAttendance,
         publishTeacherTask,

@@ -5,6 +5,7 @@ import type { UserRole } from '../../types';
 import {
   GraduationCap,
   Briefcase,
+  ShieldCheck,
   Mail,
   Lock,
   User,
@@ -163,11 +164,11 @@ export const AuthModal: React.FC = () => {
             </div>
           )}
 
-          {/* Quick Demo Role Switcher */}
+          {/* Quick Demo Role Switcher (Student / Teacher / Admin) */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Instant Demo Accounts (1-Click)
+                Instant Test Accounts (1-Click)
               </span>
               {currentUser && (
                 <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
@@ -175,23 +176,23 @@ export const AuthModal: React.FC = () => {
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               <button
                 type="button"
                 disabled={loading}
                 onClick={() => handleDemoLogin('student')}
-                className={`flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                className={`flex flex-col items-start gap-1 p-2 rounded-xl border text-left transition-all cursor-pointer ${
                   userRole === 'student'
                     ? 'bg-blue-50/90 border-[#18458b] text-[#18458b] ring-1 ring-[#18458b]/20'
                     : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                <div className="w-8 h-8 rounded-lg bg-[#18458b] text-white flex items-center justify-center shrink-0">
-                  <GraduationCap className="w-4 h-4" />
+                <div className="w-7 h-7 rounded-lg bg-[#18458b] text-white flex items-center justify-center shrink-0">
+                  <GraduationCap className="w-3.5 h-3.5" />
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold truncate">Student Demo</div>
-                  <div className="text-[10px] text-slate-500 truncate">Arystan (CS-2401)</div>
+                <div className="min-w-0 w-full">
+                  <div className="text-[11px] font-bold truncate">Student</div>
+                  <div className="text-[9.5px] text-slate-500 truncate">student123</div>
                 </div>
               </button>
 
@@ -199,18 +200,37 @@ export const AuthModal: React.FC = () => {
                 type="button"
                 disabled={loading}
                 onClick={() => handleDemoLogin('teacher')}
-                className={`flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                className={`flex flex-col items-start gap-1 p-2 rounded-xl border text-left transition-all cursor-pointer ${
                   userRole === 'teacher'
                     ? 'bg-emerald-50/90 border-emerald-600 text-emerald-900 ring-1 ring-emerald-600/20'
                     : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                  <Briefcase className="w-4 h-4" />
+                <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                  <Briefcase className="w-3.5 h-3.5" />
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold truncate">Teacher Demo</div>
-                  <div className="text-[10px] text-slate-500 truncate">Dr. Yersultan M.</div>
+                <div className="min-w-0 w-full">
+                  <div className="text-[11px] font-bold truncate">Teacher</div>
+                  <div className="text-[9.5px] text-slate-500 truncate">teacher123</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleDemoLogin('admin')}
+                className={`flex flex-col items-start gap-1 p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                  userRole === 'admin'
+                    ? 'bg-purple-50/90 border-purple-700 text-purple-900 ring-1 ring-purple-700/20'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="w-7 h-7 rounded-lg bg-purple-700 text-white flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0 w-full">
+                  <div className="text-[11px] font-bold truncate">Admin</div>
+                  <div className="text-[9.5px] text-slate-500 truncate">admin123</div>
                 </div>
               </button>
             </div>
@@ -231,30 +251,42 @@ export const AuthModal: React.FC = () => {
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
                   Select Role <span className="text-rose-500">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setRole('student')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                    className={`py-2 px-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                       role === 'student'
                         ? 'bg-[#18458b] text-white border-[#18458b] shadow-xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    <GraduationCap className="w-4 h-4" />
+                    <GraduationCap className="w-3.5 h-3.5" />
                     <span>Student</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setRole('teacher')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                    className={`py-2 px-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                       role === 'teacher'
                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    <Briefcase className="w-4 h-4" />
+                    <Briefcase className="w-3.5 h-3.5" />
                     <span>Teacher</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole('admin')}
+                    className={`py-2 px-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                      role === 'admin'
+                        ? 'bg-purple-700 text-white border-purple-700 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Admin</span>
                   </button>
                 </div>
               </div>

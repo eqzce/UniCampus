@@ -2,7 +2,9 @@ export type TabType = 'dashboard' | 'schedule' | 'grades' | 'assignments' | 'map
 
 export type TeacherTabType = 'gradebook' | 'attendance' | 'tasks' | 'schedule' | 'map';
 
-export type UserRole = 'student' | 'teacher';
+export type AdminTabType = 'courses' | 'schedule' | 'gradebook' | 'attendance' | 'tasks' | 'map';
+
+export type UserRole = 'student' | 'teacher' | 'admin';
 
 export interface AuthUser {
   id: string;

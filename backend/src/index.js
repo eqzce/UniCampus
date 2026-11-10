@@ -9,11 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'unicampus-super-secret-jwt-key-2026';
 
-// Permissive CORS for Web, Render, and Mobile APK WebViews (capacitor://localhost, https://localhost, http://localhost, file://)
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, file://) and all web/capacitor origins
+    origin: function (_origin, callback) {
       callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -24,7 +22,6 @@ app.use(
 
 app.use(express.json());
 
-// JWT Helper & Middleware
 function signToken(user) {
   return jwt.sign(
     {
@@ -73,17 +70,18 @@ function authenticateRequired(req, res, next) {
   }
 }
 
-function requireRole(role) {
+function requireRoles(roles) {
   return (req, res, next) => {
-    if (!req.user || req.user.role !== role) {
-      return res.status(403).json({ error: `Access denied. Requires '${role}' role.` });
+    const allowed = Array.isArray(roles) ? roles : [roles];
+    if (!req.user || !allowed.includes(req.user.role)) {
+      return res.status(403).json({ error: `Access denied. Requires role: ${allowed.join(' or ')}.` });
     }
     next();
   };
 }
 
 // ============================================================================
-// Health Check (Used for Render health checks & Cold-Start detection)
+// Health Check
 // ============================================================================
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -95,7 +93,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ============================================================================
-// Step 3: Authentication & Role System
+// Authentication & Role System (Student / Teacher / Admin)
 // ============================================================================
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -110,7 +108,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(409).json({ error: 'An account with this email already exists.' });
     }
 
-    const validRole = role === 'teacher' ? 'teacher' : 'student';
+    const validRole = ['student', 'teacher', 'admin'].includes(role) ? role : 'student';
     const password_hash = await bcrypt.hash(String(password), 10);
 
     const newUser = await db.createUser({
@@ -119,10 +117,9 @@ app.post('/api/auth/register', async (req, res) => {
       full_name,
       role: validRole,
       group_name: validRole === 'student' ? group_name || 'CS-2401' : null,
-      department: validRole === 'teacher' ? department || 'Computer Science & Software Engineering' : null,
+      department: validRole !== 'student' ? department || 'Computer Science & Software Engineering' : null,
     });
 
-    // If new student, seed two starter grades so their GPA & gradebook work immediately
     if (validRole === 'student') {
       const courses = await db.getCourses();
       if (courses.length > 0) {
@@ -198,7 +195,7 @@ app.get('/api/auth/me', authenticateRequired, async (req, res) => {
 });
 
 // ============================================================================
-// Bootstrap Endpoint (Fetches all role-appropriate data in 1 call + Offline Cache)
+// Bootstrap Endpoint (Fetches all role-appropriate data in 1 call)
 // ============================================================================
 app.get('/api/bootstrap', authenticateOptional, async (req, res) => {
   try {
@@ -207,14 +204,14 @@ app.get('/api/bootstrap', authenticateOptional, async (req, res) => {
       activeUser = await db.findUserById(req.user.id);
     }
     if (!activeUser) {
-      // Default to primary demo student if unauthenticated preview
-      activeUser = await db.findUserByEmail('student@astanait.edu.kz');
+      activeUser = await db.findUserByEmail('student@unicampus.kz');
     }
 
     const courses = await db.getCourses();
+    const teachers = await db.getTeachers();
     const bookings = await db.getRoomBookings();
 
-    if (activeUser && activeUser.role === 'teacher') {
+    if (activeUser && (activeUser.role === 'teacher' || activeUser.role === 'admin')) {
       const students = await db.getStudents();
       const grades = await db.getGrades();
       const attendance = await db.getAttendance();
@@ -224,6 +221,7 @@ app.get('/api/bootstrap', authenticateOptional, async (req, res) => {
       return res.json({
         user: sanitizeUser(activeUser),
         courses,
+        teachers,
         students,
         grades,
         attendance,
@@ -246,6 +244,7 @@ app.get('/api/bootstrap', authenticateOptional, async (req, res) => {
     res.json({
       user: activeUser ? { ...sanitizeUser(activeUser), gpa } : null,
       courses,
+      teachers,
       grades,
       gpa,
       attendance,
@@ -261,12 +260,55 @@ app.get('/api/bootstrap', authenticateOptional, async (req, res) => {
 });
 
 // ============================================================================
-// Courses & Students
+// Courses / Subjects & Teachers (Admin Subject & Teacher Binding)
 // ============================================================================
 app.get('/api/courses', async (_req, res) => {
   try {
     const courses = await db.getCourses();
     res.json(courses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/courses', authenticateOptional, async (req, res) => {
+  try {
+    const { title, code, credits, teacher_id } = req.body || {};
+    if (!title || !code) {
+      return res.status(400).json({ error: 'Subject title and code are required.' });
+    }
+    const course = await db.createCourse({ title, code, credits, teacher_id });
+    res.status(201).json({ course });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/courses/:id', authenticateOptional, async (req, res) => {
+  try {
+    const updated = await db.updateCourse(req.params.id, req.body || {});
+    if (!updated) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+    res.json({ course: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/courses/:id', authenticateOptional, async (req, res) => {
+  try {
+    await db.deleteCourse(req.params.id);
+    res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/teachers', async (_req, res) => {
+  try {
+    const teachers = await db.getTeachers();
+    res.json(teachers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -294,7 +336,7 @@ app.get('/api/students', authenticateOptional, async (req, res) => {
 });
 
 // ============================================================================
-// Grades (Student View + Teacher Interactive Gradebook)
+// Grades (Student Read-Only + Teacher/Admin Gradebook)
 // ============================================================================
 app.get('/api/grades', authenticateOptional, async (req, res) => {
   try {
@@ -315,7 +357,7 @@ app.get('/api/grades', authenticateOptional, async (req, res) => {
   }
 });
 
-app.post('/api/grades', authenticateRequired, requireRole('teacher'), async (req, res) => {
+app.post('/api/grades', authenticateRequired, requireRoles(['teacher', 'admin']), async (req, res) => {
   try {
     const { id, student_id, course_id, category, score, feedback } = req.body || {};
     if (!student_id || !course_id || !category || score === undefined) {
@@ -339,7 +381,7 @@ app.post('/api/grades', authenticateRequired, requireRole('teacher'), async (req
 });
 
 // ============================================================================
-// Attendance (Student Stats + Teacher Attendance Tracker)
+// Attendance
 // ============================================================================
 app.get('/api/attendance', authenticateOptional, async (req, res) => {
   try {
@@ -360,7 +402,7 @@ app.get('/api/attendance', authenticateOptional, async (req, res) => {
   }
 });
 
-app.post('/api/attendance', authenticateRequired, requireRole('teacher'), async (req, res) => {
+app.post('/api/attendance', authenticateRequired, requireRoles(['teacher', 'admin']), async (req, res) => {
   try {
     const { records, student_id, course_id, date, status } = req.body || {};
 
@@ -390,7 +432,7 @@ app.post('/api/attendance', authenticateRequired, requireRole('teacher'), async 
 });
 
 // ============================================================================
-// Assignments & Deadlines (Student Tasks + Teacher Task Creator)
+// Assignments & Deadlines
 // ============================================================================
 app.get('/api/assignments', authenticateOptional, async (req, res) => {
   try {
@@ -446,7 +488,7 @@ app.delete('/api/assignments/:id', authenticateOptional, async (req, res) => {
 });
 
 // ============================================================================
-// Schedule & Room Bookings
+// Schedule (Student Read-Only + Teacher & Admin Modify/Create/Delete)
 // ============================================================================
 app.get('/api/schedule', authenticateOptional, async (req, res) => {
   try {
@@ -467,6 +509,18 @@ app.post('/api/schedule', authenticateOptional, async (req, res) => {
   }
 });
 
+app.put('/api/schedule/:id', authenticateOptional, async (req, res) => {
+  try {
+    const updated = await db.updateScheduleItem(req.params.id, req.body || {});
+    if (!updated) {
+      return res.status(404).json({ error: 'Schedule item not found' });
+    }
+    res.json({ scheduleItem: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/schedule/:id', authenticateOptional, async (req, res) => {
   try {
     await db.deleteScheduleItem(req.params.id);
@@ -476,6 +530,9 @@ app.delete('/api/schedule/:id', authenticateOptional, async (req, res) => {
   }
 });
 
+// ============================================================================
+// Room Bookings
+// ============================================================================
 app.get('/api/bookings', authenticateOptional, async (_req, res) => {
   try {
     const bookings = await db.getRoomBookings();
@@ -501,7 +558,7 @@ app.post('/api/bookings', authenticateOptional, async (req, res) => {
       date: date || new Date().toISOString().slice(0, 10),
       time_slot: time_slot || '14:00 - 16:00',
       purpose: purpose || 'Study session',
-      status: req.user?.role === 'teacher' ? 'confirmed' : 'pending',
+      status: req.user?.role === 'teacher' || req.user?.role === 'admin' ? 'confirmed' : 'pending',
     });
 
     res.status(201).json({ booking });
@@ -510,7 +567,7 @@ app.post('/api/bookings', authenticateOptional, async (req, res) => {
   }
 });
 
-app.patch('/api/bookings/:id', authenticateRequired, requireRole('teacher'), async (req, res) => {
+app.patch('/api/bookings/:id', authenticateRequired, requireRoles(['teacher', 'admin']), async (req, res) => {
   try {
     const { status } = req.body || {};
     const updated = await db.updateRoomBookingStatus(req.params.id, status);
@@ -523,7 +580,6 @@ app.patch('/api/bookings/:id', authenticateRequired, requireRole('teacher'), asy
   }
 });
 
-// Start Server after Database Initialization
 initDatabase()
   .then(({ engine }) => {
     app.listen(PORT, '0.0.0.0', () => {

@@ -9,13 +9,12 @@ import {
   Circle,
   ChevronDown,
   ChevronUp,
-  Plus,
   FileEdit,
   Clock,
   Sparkles,
-  Trash2,
   Award,
   MessageSquare,
+  Eye,
 } from 'lucide-react';
 
 export const GradesScreen: React.FC = () => {
@@ -27,8 +26,6 @@ export const GradesScreen: React.FC = () => {
     setSelectedCourseFilter,
     toggleAssignmentStatus,
     addPersonalNote,
-    removeAssignment,
-    setIsAddScheduleOpen,
     grades,
     student,
     currentUser,
@@ -303,16 +300,11 @@ export const GradesScreen: React.FC = () => {
           })}
         </div>
 
-        {/* Action Bar: Add Course/Homework & Sort */}
+        {/* Action Bar: View-Only Info & Sort */}
         <div className="flex items-center justify-between text-xs px-1">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsAddScheduleOpen(true)}
-              className="text-[#18458b] hover:text-blue-800 font-bold flex items-center gap-1 active:scale-95 transition-transform cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Add Class / Homework</span>
-            </button>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+            <Eye className="w-3.5 h-3.5 text-blue-600" />
+            <span>Official Grades & Tasks (View Only)</span>
           </div>
 
           <button
@@ -339,20 +331,13 @@ export const GradesScreen: React.FC = () => {
                 key={asg.id}
                 className="bg-white rounded-2xl p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between hover:shadow-md transition-shadow relative group"
               >
-                {/* Category & Delete Option */}
+                {/* Category Badge */}
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                   <span
                     className={`text-[9.5px] px-2 py-0.5 rounded-full border ${catBadge.classes}`}
                   >
                     {catBadge.label}
                   </span>
-                  <button
-                    onClick={() => removeAssignment(asg.id)}
-                    title="Delete task"
-                    className="text-slate-300 hover:text-rose-500 p-0.5 -mr-1 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
 
                 {/* Title */}

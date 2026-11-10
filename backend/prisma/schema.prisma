@@ -12,6 +12,7 @@ datasource db {
 enum Role {
   student
   teacher
+  admin
 }
 
 enum AttendanceStatus {
@@ -27,12 +28,12 @@ model User {
   full_name     String
   role          Role         @default(student)
   group_name    String?      // For students, e.g., "CS-2401"
-  department    String?      // For teachers, e.g., "Computer Science"
+  department    String?      // For teachers/admins, e.g., "Computer Science"
   created_at    DateTime     @default(now())
 
-  courses_taught Course[]     @relation("TeacherCourses")
-  grades_received Grade[]     @relation("StudentGrades")
-  grades_given    Grade[]     @relation("TeacherGrades")
+  courses_taught  Course[]      @relation("TeacherCourses")
+  grades_received Grade[]       @relation("StudentGrades")
+  grades_given    Grade[]       @relation("TeacherGrades")
   attendance      Attendance[]
   room_bookings   RoomBooking[]
 

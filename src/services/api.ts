@@ -206,6 +206,7 @@ export const ApiService = {
     const data = await fetchWithColdStartTimeout<{
       user: AuthUser | null;
       courses: CourseRecord[];
+      teachers?: AuthUser[];
       students?: AuthUser[];
       grades: GradeRecord[];
       gpa?: number;
@@ -219,6 +220,7 @@ export const ApiService = {
     return {
       user: data.user,
       courses: data.courses || [],
+      teachers: data.teachers || [],
       students: data.students || [],
       grades: data.grades || [],
       gpa: data.gpa ?? 3.78,
@@ -228,6 +230,41 @@ export const ApiService = {
       bookings: (data.bookings || []).map(mapDbBooking),
       syncedAt: data.syncedAt,
     };
+  },
+
+  async createCourse(payload: {
+    title: string;
+    code: string;
+    credits: number;
+    teacher_id: string;
+  }): Promise<CourseRecord> {
+    const res = await fetchWithColdStartTimeout<{ course: CourseRecord }>('/courses', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return res.course;
+  },
+
+  async updateCourse(
+    id: string,
+    payload: {
+      title?: string;
+      code?: string;
+      credits?: number;
+      teacher_id?: string;
+    }
+  ): Promise<CourseRecord> {
+    const res = await fetchWithColdStartTimeout<{ course: CourseRecord }>(`/courses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    return res.course;
+  },
+
+  async deleteCourse(id: string): Promise<void> {
+    await fetchWithColdStartTimeout(`/courses/${id}`, {
+      method: 'DELETE',
+    });
   },
 
   async saveGrade(payload: {
@@ -293,6 +330,17 @@ export const ApiService = {
       '/schedule',
       {
         method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    return mapDbScheduleItem(res.scheduleItem);
+  },
+
+  async updateScheduleItem(id: string, payload: Partial<Omit<ScheduleItem, 'id'>>): Promise<ScheduleItem> {
+    const res = await fetchWithColdStartTimeout<{ scheduleItem: Record<string, unknown> }>(
+      `/schedule/${id}`,
+      {
+        method: 'PUT',
         body: JSON.stringify(payload),
       }
     );

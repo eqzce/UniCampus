@@ -7,8 +7,10 @@ import { ScheduleScreen } from './components/schedule/ScheduleScreen';
 import { GradesScreen } from './components/grades/GradesScreen';
 import { CampusMapScreen } from './components/map/CampusMapScreen';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
+import { AdminDashboard } from './components/admin/AdminDashboard';
 import { BottomNav } from './components/common/BottomNav';
 import { TeacherBottomNav } from './components/teacher/TeacherBottomNav';
+import { AdminBottomNav } from './components/admin/AdminBottomNav';
 import { AIAssistantModal } from './components/ai/AIAssistantModal';
 import { RoomBookingModal } from './components/booking/RoomBookingModal';
 import { NotificationsModal } from './components/notifications/NotificationsModal';
@@ -25,6 +27,7 @@ import {
   GraduationCap,
   CalendarPlus,
   Briefcase,
+  ShieldCheck,
   LogIn,
   Loader2,
   Download,
@@ -58,6 +61,9 @@ const MainContent: React.FC = () => {
   );
 
   const renderFullscreenContent = () => {
+    if (userRole === 'admin') {
+      return <AdminDashboard />;
+    }
     if (userRole === 'teacher') {
       return <TeacherDashboard />;
     }
@@ -89,7 +95,13 @@ const MainContent: React.FC = () => {
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {renderFullscreenContent()}
         </div>
-        {userRole === 'teacher' ? <TeacherBottomNav /> : <BottomNav />}
+        {userRole === 'admin' ? (
+          <AdminBottomNav />
+        ) : userRole === 'teacher' ? (
+          <TeacherBottomNav />
+        ) : (
+          <BottomNav />
+        )}
         <ProfileModal />
         <AuthModal />
         <AIAssistantModal />
@@ -125,12 +137,18 @@ const MainContent: React.FC = () => {
               UniCampus
               <span
                 className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
-                  userRole === 'teacher'
+                  userRole === 'admin'
+                    ? 'bg-purple-900/60 text-purple-300 border-purple-700/50'
+                    : userRole === 'teacher'
                     ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/50'
                     : 'bg-blue-900/60 text-blue-300 border-blue-700/50'
                 }`}
               >
-                {userRole === 'teacher' ? 'Teacher RBAC' : 'Student RBAC'}
+                {userRole === 'admin'
+                  ? 'Admin RBAC'
+                  : userRole === 'teacher'
+                  ? 'Teacher RBAC'
+                  : 'Student RBAC'}
               </span>
               {isOfflineMode && (
                 <span className="text-[10px] bg-amber-900/60 text-amber-300 border border-amber-700/50 px-1.5 py-0.5 rounded-full font-semibold">
@@ -139,16 +157,18 @@ const MainContent: React.FC = () => {
               )}
             </h1>
             <p className="text-[11px] text-slate-400">
-              {userRole === 'teacher'
+              {userRole === 'admin'
+                ? `Admin: ${currentUser?.full_name || 'Aidar K.'}`
+                : userRole === 'teacher'
                 ? `Teacher: ${currentUser?.full_name || 'Dr. Yersultan M.'}`
                 : `Student: ${student.fullName} (GPA: ${student.gpa.toFixed(2)})`}
             </p>
           </div>
         </div>
 
-        {/* Role Switcher (Student / Teacher) + View Mode Switcher */}
+        {/* Role Switcher (Student / Teacher / Admin) + View Mode Switcher */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Student / Teacher Role Toggle */}
+          {/* Student / Teacher / Admin Role Toggle */}
           <div className="flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
             <button
               onClick={() => switchDemoRole('student')}
@@ -157,7 +177,7 @@ const MainContent: React.FC = () => {
                   ? 'bg-[#18458b] text-white shadow-xs'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Switch to Student Role Interface"
+              title="Switch to Student Role Interface (View-Only Grades & Schedule)"
             >
               <GraduationCap className="w-3.5 h-3.5" />
               <span>Student</span>
@@ -170,10 +190,23 @@ const MainContent: React.FC = () => {
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Switch to Teacher Role Interface"
+              title="Switch to Teacher Role Interface (Modify Schedule & Grade Students)"
             >
               <Briefcase className="w-3.5 h-3.5" />
               <span>Teacher</span>
+            </button>
+
+            <button
+              onClick={() => switchDemoRole('admin')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                userRole === 'admin'
+                  ? 'bg-purple-700 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Switch to Admin Role Interface (Add Subjects, Bind Teachers & Full Access)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Admin</span>
             </button>
           </div>
 
@@ -239,13 +272,15 @@ const MainContent: React.FC = () => {
             <span>Save Offline</span>
           </button>
 
-          <button
-            onClick={() => setIsAddScheduleOpen(true)}
-            className="flex items-center gap-1.5 text-xs bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl font-medium transition-all cursor-pointer"
-          >
-            <CalendarPlus className="w-3.5 h-3.5 text-emerald-300" />
-            <span>Add Class</span>
-          </button>
+          {userRole !== 'student' && (
+            <button
+              onClick={() => setIsAddScheduleOpen(true)}
+              className="flex items-center gap-1.5 text-xs bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl font-medium transition-all cursor-pointer"
+            >
+              <CalendarPlus className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Add Class</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsAIAssistantOpen(true)}
@@ -290,7 +325,13 @@ const MainContent: React.FC = () => {
             <div className="flex-1 overflow-hidden flex flex-col">
               {renderFullscreenContent()}
             </div>
-            {userRole === 'teacher' ? <TeacherBottomNav /> : <BottomNav />}
+            {userRole === 'admin' ? (
+              <AdminBottomNav />
+            ) : userRole === 'teacher' ? (
+              <TeacherBottomNav />
+            ) : (
+              <BottomNav />
+            )}
           </div>
         )}
       </main>

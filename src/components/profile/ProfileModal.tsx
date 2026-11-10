@@ -156,37 +156,64 @@ export const ProfileModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Role Switcher & Auth Portal Buttons (Works in both Web and Mobile APK) */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <button
-              onClick={() => {
-                switchDemoRole(isTeacher ? 'student' : 'teacher');
-                setIsProfileOpen(false);
-              }}
-              className="flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors cursor-pointer"
-            >
-              {isTeacher ? (
-                <>
-                  <GraduationCap className="w-3.5 h-3.5" />
-                  <span>Student View</span>
-                </>
-              ) : (
-                <>
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>Teacher View</span>
-                </>
-              )}
-            </button>
+          {/* 3-Way Role Switcher (Student / Teacher / Admin) & Auth Portal Buttons */}
+          <div className="space-y-2 mb-3">
+            <div className="grid grid-cols-3 gap-1.5">
+              <button
+                onClick={() => {
+                  switchDemoRole('student');
+                  setIsProfileOpen(false);
+                }}
+                className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 px-2 rounded-xl border transition-colors cursor-pointer ${
+                  userRole === 'student'
+                    ? 'bg-[#18458b] text-white border-[#18458b]'
+                    : 'bg-blue-50 hover:bg-blue-100 text-[#18458b] border-blue-200'
+                }`}
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Student</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  switchDemoRole('teacher');
+                  setIsProfileOpen(false);
+                }}
+                className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 px-2 rounded-xl border transition-colors cursor-pointer ${
+                  userRole === 'teacher'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5" />
+                <span>Teacher</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  switchDemoRole('admin');
+                  setIsProfileOpen(false);
+                }}
+                className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 px-2 rounded-xl border transition-colors cursor-pointer ${
+                  userRole === 'admin'
+                    ? 'bg-purple-700 text-white border-purple-700'
+                    : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border-purple-200'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Admin</span>
+              </button>
+            </div>
 
             <button
               onClick={() => {
                 setIsProfileOpen(false);
                 setIsAuthModalOpen(true);
               }}
-              className="flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#18458b] border border-blue-200 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition-colors cursor-pointer"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In / Register</span>
+              <span>Sign In / Switch Account</span>
             </button>
           </div>
 
