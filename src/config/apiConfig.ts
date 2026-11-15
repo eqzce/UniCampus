@@ -23,11 +23,16 @@ export function isNativeCapacitorApk(): boolean {
   );
 }
 
+function ensureApiSuffix(rawUrl: string): string {
+  const trimmed = rawUrl.trim().replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+}
+
 export function getApiBaseUrl(): string {
   try {
     const customUrl = localStorage.getItem(STORAGE_KEY_API_URL);
     if (customUrl && customUrl.trim()) {
-      return customUrl.trim().replace(/\/+$/, '');
+      return ensureApiSuffix(customUrl);
     }
   } catch {
     // ignore storage access errors
@@ -35,12 +40,12 @@ export function getApiBaseUrl(): string {
 
   const envUrl = import.meta.env.VITE_API_URL as string | undefined;
   if (envUrl && envUrl.trim()) {
-    return envUrl.trim().replace(/\/+$/, '');
+    return ensureApiSuffix(envUrl);
   }
 
   // If running inside Capacitor APK without a custom env var, default to configured cloud API URL
   if (isNativeCapacitorApk()) {
-    return 'https://unicampus-api.onrender.com/api';
+    return 'https://unicampus-api-ncw2.onrender.com/api';
   }
 
   // If running on localhost browser during development

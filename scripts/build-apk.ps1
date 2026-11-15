@@ -25,16 +25,53 @@ Set-Location $projectRoot
 $env:JAVA_TOOL_OPTIONS = "-Djava.net.preferIPv4Stack=true -Dfile.encoding=UTF-8"
 $env:GRADLE_OPTS = ""
 
-# 1. Configure Node.js & Java 17
+# 1. Configure Node.js & Java 17 (auto-download portable Temurin JDK 17 if not installed)
 $vsNodePath = "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VisualStudio\NodeJs"
 if (Test-Path (Join-Path $vsNodePath "node.exe")) {
     $env:Path = "$vsNodePath;$env:Path"
 }
 
-$temurinPath = "C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot"
-if (Test-Path (Join-Path $temurinPath "bin\java.exe")) {
-    $env:JAVA_HOME = $temurinPath
-    $env:Path = "$temurinPath\bin;$env:Path"
+$portableJdkRoot = Join-Path $env:LOCALAPPDATA "UniCampus\jdk-17"
+$candidateJdks = @(
+    "C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot",
+    (Join-Path $portableJdkRoot "jdk-17.0.13+11")
+)
+if (Test-Path "C:\Program Files\Eclipse Adoptium") {
+    Get-ChildItem "C:\Program Files\Eclipse Adoptium" -Directory -Filter "jdk-17*" -ErrorAction SilentlyContinue | ForEach-Object {
+        $candidateJdks += $_.FullName
+    }
+}
+
+$foundJdk = $null
+foreach ($cand in $candidateJdks) {
+    if (Test-Path (Join-Path $cand "bin\javac.exe")) {
+        $foundJdk = $cand
+        break
+    }
+}
+
+if (-not $foundJdk) {
+    Write-Host "[1/5] Java JDK 17 not found on system. Downloading portable Eclipse Temurin JDK 17..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Force -Path $portableJdkRoot | Out-Null
+    $jdkZip = Join-Path $env:TEMP "temurin-jdk17-win-x64.zip"
+    $jdkUrl = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jdk_x64_windows_hotspot_17.0.13_11.zip"
+    if (-not (Test-Path $jdkZip) -or (Get-Item $jdkZip).Length -lt 150000000) {
+        & "C:\Windows\System32\curl.exe" --ssl-no-revoke -L -C - --retry 5 --retry-delay 2 -o $jdkZip $jdkUrl
+    }
+    Write-Host "[1/5] Extracting portable JDK 17..." -ForegroundColor Yellow
+    & "C:\Windows\System32\tar.exe" -xf $jdkZip -C $portableJdkRoot
+    if ($LASTEXITCODE -ne 0) {
+        Expand-Archive -Path $jdkZip -DestinationPath $portableJdkRoot -Force
+    }
+    $extracted = Get-ChildItem $portableJdkRoot -Directory -Filter "jdk-17*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($extracted -and (Test-Path (Join-Path $extracted.FullName "bin\javac.exe"))) {
+        $foundJdk = $extracted.FullName
+    }
+}
+
+if ($foundJdk) {
+    $env:JAVA_HOME = $foundJdk
+    $env:Path = "$foundJdk\bin;$env:Path"
 }
 
 Write-Host "[1/5] Checking Java JDK..." -ForegroundColor Yellow
@@ -152,14 +189,10 @@ foreach ($gf in $gradleFilesToPatch) {
     }
 }
 
-# 5. Setup Android SDK if needed
+# 5. Setup Android SDK if needed (store outside OneDrive in LOCALAPPDATA\Android\Sdk)
 $sdkRoot = $env:ANDROID_HOME
 if ([string]::IsNullOrWhiteSpace($sdkRoot)) {
-    if (Test-Path "$env:LOCALAPPDATA\Android\Sdk") {
-        $sdkRoot = "$env:LOCALAPPDATA\Android\Sdk"
-    } else {
-        $sdkRoot = Join-Path $projectRoot ".android-sdk"
-    }
+    $sdkRoot = "$env:LOCALAPPDATA\Android\Sdk"
 }
 
 $hasPlatform = Test-Path (Join-Path $sdkRoot "platforms\android-36")

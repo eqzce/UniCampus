@@ -646,31 +646,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Auth Actions
   const loginWithCredentials = async (email: string, password: string): Promise<AuthUser> => {
-    try {
-      const { user } = await ApiService.login(email, password);
-      setCurrentUser(user);
-      setBackendConnected(true);
-      await refreshFromBackend();
-      return user;
-    } catch (err) {
-      // Offline / local fallback against the institutional account directory
-      const lower = email.trim().toLowerCase();
-      const directoryMatch = OFFLINE_ACCOUNT_DIRECTORY.find((u) => u.email.toLowerCase() === lower);
-      if (directoryMatch) {
-        const expectedPass =
-          directoryMatch.role === 'admin'
-            ? 'admin123'
-            : directoryMatch.role === 'teacher'
-              ? 'teacher123'
-              : 'student123';
-        if (password === expectedPass || password === 'password123') {
-          setStoredAuth(`offline-token-${directoryMatch.id}`, directoryMatch);
-          setCurrentUser(directoryMatch);
-          return directoryMatch;
+    if (!isOfflineMode) {
+      try {
+        const { user } = await ApiService.login(email, password);
+        setCurrentUser(user);
+        setBackendConnected(true);
+        await refreshFromBackend();
+        return user;
+      } catch (err) {
+        const lower = email.trim().toLowerCase();
+        const directoryMatch = OFFLINE_ACCOUNT_DIRECTORY.find(
+          (u) => u.email.toLowerCase() === lower
+        );
+        if (directoryMatch) {
+          const expectedPass =
+            directoryMatch.role === 'admin'
+              ? 'admin123'
+              : directoryMatch.role === 'teacher'
+                ? 'teacher123'
+                : 'student123';
+          if (password === expectedPass || password === 'password123') {
+            setStoredAuth(`offline-token-${directoryMatch.id}`, directoryMatch);
+            setCurrentUser(directoryMatch);
+            return directoryMatch;
+          }
         }
+        throw err;
       }
-      throw err;
     }
+
+    const lower = email.trim().toLowerCase();
+    const directoryMatch = OFFLINE_ACCOUNT_DIRECTORY.find((u) => u.email.toLowerCase() === lower);
+    if (directoryMatch) {
+      const expectedPass =
+        directoryMatch.role === 'admin'
+          ? 'admin123'
+          : directoryMatch.role === 'teacher'
+            ? 'teacher123'
+            : 'student123';
+      if (password === expectedPass || password === 'password123') {
+        setStoredAuth(`offline-token-${directoryMatch.id}`, directoryMatch);
+        setCurrentUser(directoryMatch);
+        return directoryMatch;
+      }
+    }
+    throw new Error('Invalid email or password');
   };
 
   const registerAccount = async (payload: {
