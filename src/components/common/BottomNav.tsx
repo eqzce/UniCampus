@@ -1,5 +1,5 @@
 import React from 'react';
-import { Gauge, Calendar, GraduationCap, MapPin } from 'lucide-react';
+import { Gauge, Calendar, GraduationCap, CheckSquare, MapPin } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { TabType } from '../../types';
 
@@ -37,6 +37,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({ forcedTab, onTabChange }) 
       icon: GraduationCap,
     },
     {
+      id: 'assignments' as TabType,
+      label: 'Tasks',
+      icon: CheckSquare,
+    },
+    {
       id: 'map' as TabType,
       label: 'Map',
       icon: MapPin,
@@ -44,12 +49,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({ forcedTab, onTabChange }) 
   ];
 
   return (
-    <nav className="bg-white border-t border-slate-100 py-2 px-3 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] z-20">
+    <nav className="bg-white border-t border-slate-100 py-2 px-2 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] z-20">
       <div className="flex items-center justify-around">
         {navItems.map((item) => {
-          const isActive =
-            currentTab === item.id ||
-            (item.id === 'grades' && (currentTab as string) === 'assignments');
+          const isActive = currentTab === item.id;
           const Icon = item.icon;
 
           return (

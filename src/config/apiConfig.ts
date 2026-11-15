@@ -38,7 +38,7 @@ export function getApiBaseUrl(): string {
     return envUrl.trim().replace(/\/+$/, '');
   }
 
-  // If running inside Capacitor APK without a custom env var, default to Render HTTPS URL
+  // If running inside Capacitor APK without a custom env var, default to configured cloud API URL
   if (isNativeCapacitorApk()) {
     return 'https://unicampus-api.onrender.com/api';
   }
@@ -51,7 +51,12 @@ export function getApiBaseUrl(): string {
     return 'http://localhost:5000/api';
   }
 
-  return 'https://unicampus-api.onrender.com/api';
+  // Same-origin /api on Vercel / web deployments
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return `${window.location.origin}/api`;
+  }
+
+  return '/api';
 }
 
 export function setCustomApiBaseUrl(url: string | null): void {

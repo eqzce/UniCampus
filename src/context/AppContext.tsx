@@ -14,8 +14,20 @@ import type {
   AttendanceStatusType,
   RoomBooking,
   AssessmentCategory,
+  Announcement,
+  StudentLifeEvent,
+  LmsIntegrationItem,
+  AIQuotaInfo,
 } from '../types';
-import { ASSIGNMENTS_LIST, CURRENT_STUDENT, RECENT_ANNOUNCEMENTS, WEEKLY_SCHEDULE } from '../data/mockData';
+import {
+  ASSIGNMENTS_LIST,
+  CURRENT_STUDENT,
+  DEFAULT_LMS_INTEGRATIONS,
+  DEFAULT_STUDENT_LIFE_EVENTS,
+  RECENT_ANNOUNCEMENTS,
+  WEEKLY_SCHEDULE,
+} from '../data/mockData';
+import { formatShortMonthDay } from '../utils/dateUtils';
 import {
   ApiService,
   getStoredToken,
@@ -103,8 +115,10 @@ interface AppContextType {
     role: UserRole;
     group_name?: string;
     department?: string;
+    enrolled_course_ids?: string[];
+    course_code?: string;
+    course_title?: string;
   }) => Promise<AuthUser>;
-  switchDemoRole: (role: UserRole) => Promise<void>;
   logout: () => void;
 
   // Backend Sync & Cold-Start Status
@@ -124,6 +138,9 @@ interface AppContextType {
   setIsAIAssistantOpen: (open: boolean) => void;
   isBookingOpen: boolean;
   setIsBookingOpen: (open: boolean) => void;
+  preselectedBookingRoom: { roomNumber: string; buildingName?: string } | null;
+  setPreselectedBookingRoom: (target: { roomNumber: string; buildingName?: string } | null) => void;
+  openRoomBookingFor: (roomNumber: string, buildingName?: string) => void;
   isQuickActionsOpen: boolean;
   setIsQuickActionsOpen: (open: boolean) => void;
   isAddScheduleOpen: boolean;
@@ -131,14 +148,22 @@ interface AppContextType {
 
   // Schedule state & actions
   scheduleItems: ScheduleItem[];
+  selectedWeekOffset: number;
+  setSelectedWeekOffset: React.Dispatch<React.SetStateAction<number>>;
   addScheduleItem: (
     item: Omit<ScheduleItem, 'id'>,
     homework?: { title: string; dueDate?: string; daysLeft?: number }
   ) => ScheduleItem;
+  importTeacherSchedule: (
+    items: Array<Omit<ScheduleItem, 'id'>>,
+    replaceWeekStart?: string
+  ) => Promise<void>;
   updateScheduleClass: (id: string, payload: Partial<Omit<ScheduleItem, 'id'>>) => Promise<void>;
   removeScheduleItem: (id: string) => void;
   clearAllSchedule: () => void;
   resetDefaultSchedule: () => void;
+  saveScheduleBackup: () => void;
+  restoreSavedSchedule: () => void;
   addHomeworkForCourse: (
     courseName: string,
     courseCode: string,
@@ -208,6 +233,19 @@ interface AppContextType {
     category?: AssessmentCategory;
     weight?: string;
   }) => Promise<void>;
+  updateTeacherTask: (
+    id: string,
+    payload: {
+      title?: string;
+      description?: string;
+      due_date?: string;
+      category?: AssessmentCategory;
+      weight?: string;
+      group_name?: string;
+      course_id?: string;
+      course_code?: string;
+    }
+  ) => Promise<void>;
   createRoomBooking: (payload: {
     roomNumber: string;
     buildingName: string;
@@ -221,6 +259,40 @@ interface AppContextType {
   isOfflineMode: boolean;
   setIsOfflineMode: (offline: boolean) => void;
 
+  // Live Announcements, Student Life Events, LMS Middleware & AI Advisor
+  announcements: Announcement[];
+  markAnnouncementRead: (id: string, unread?: boolean) => Promise<void>;
+  markAllAnnouncementsRead: () => Promise<void>;
+  createCustomAnnouncement: (payload: {
+    title: string;
+    description: string;
+    courseCode?: string;
+    room?: string;
+    type?: Announcement['type'];
+  }) => Promise<void>;
+  studentLifeEvents: StudentLifeEvent[];
+  toggleEventRegistration: (id: string) => Promise<void>;
+  createStudentLifeEvent: (payload: {
+    title: string;
+    organizer: string;
+    category: StudentLifeEvent['category'];
+    date: string;
+    location: string;
+    room?: string;
+    prizeOrPerks?: string;
+    isSponsored?: boolean;
+    description: string;
+  }) => Promise<void>;
+  lmsIntegrations: LmsIntegrationItem[];
+  syncLmsProvider: (provider?: string) => Promise<void>;
+  aiQuota: AIQuotaInfo;
+  askAI: (prompt: string) => Promise<{
+    reply: string;
+    recommendedRoom: string | null;
+    recommendedTab: string | null;
+    provider: string;
+  }>;
+
   // Student info (dynamically enriched with live user & GPA)
   student: typeof CURRENT_STUDENT & { groupName?: string; role?: UserRole; department?: string };
   unreadAnnouncementsCount: number;
@@ -228,13 +300,16 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const DEFAULT_COURSE_IDS = ['crs-phys101', 'crs-math101', 'crs-cs101'];
+
 const DEFAULT_DEMO_STUDENT: AuthUser = {
   id: 'usr-student-1',
   email: 'student@unicampus.kz',
   full_name: 'Arystan Seitkaliyev',
   role: 'student',
   group_name: 'CS-2401',
-  gpa: 3.78,
+  enrolled_course_ids: DEFAULT_COURSE_IDS,
+  gpa: 3.90,
 };
 
 const DEFAULT_DEMO_TEACHER: AuthUser = {
@@ -242,7 +317,8 @@ const DEFAULT_DEMO_TEACHER: AuthUser = {
   email: 'teacher@unicampus.kz',
   full_name: 'Dr. Yersultan M.',
   role: 'teacher',
-  department: 'Department of Physics & Intelligent Systems',
+  department: 'Department of Physics & Mathematics',
+  enrolled_course_ids: ['crs-phys101', 'crs-math101'],
 };
 
 const DEFAULT_DEMO_ADMIN: AuthUser = {
@@ -250,8 +326,56 @@ const DEFAULT_DEMO_ADMIN: AuthUser = {
   email: 'admin@unicampus.kz',
   full_name: 'Aidar K. (System Admin)',
   role: 'admin',
-  department: 'Academic Affairs & Registry',
+  department: 'University Academic Affairs & IT Administration',
 };
+
+const OFFLINE_ACCOUNT_DIRECTORY: AuthUser[] = [
+  DEFAULT_DEMO_ADMIN,
+  DEFAULT_DEMO_TEACHER,
+  {
+    id: 'usr-teacher-3',
+    email: 'aigerim@unicampus.kz',
+    full_name: 'Dr. Aigerim S.',
+    role: 'teacher',
+    department: 'School of Computer Science',
+    enrolled_course_ids: ['crs-cs101'],
+  },
+  {
+    id: 'usr-teacher-4',
+    email: 'serik@unicampus.kz',
+    full_name: 'Prof. Serik B.',
+    role: 'teacher',
+    department: 'Department of Humanities & History',
+    enrolled_course_ids: ['crs-hist102'],
+  },
+  {
+    id: 'usr-teacher-5',
+    email: 'elena@unicampus.kz',
+    full_name: 'Dr. Elena K.',
+    role: 'teacher',
+    department: 'Center for Academic Languages',
+    enrolled_course_ids: ['crs-eng103'],
+  },
+  DEFAULT_DEMO_STUDENT,
+  {
+    id: 'usr-student-2',
+    email: 'alisher@unicampus.kz',
+    full_name: 'Alisher Nurlanov',
+    role: 'student',
+    group_name: 'SE-2402',
+    enrolled_course_ids: ['crs-math101', 'crs-cs101', 'crs-hist102'],
+    gpa: 2.95,
+  },
+  {
+    id: 'usr-student-3',
+    email: 'dana@unicampus.kz',
+    full_name: 'Dana Suleimenova',
+    role: 'student',
+    group_name: 'IT-2403',
+    enrolled_course_ids: ['crs-phys101', 'crs-hist102', 'crs-eng103'],
+    gpa: 1.69,
+  },
+];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const cachedSnapshot = useMemo(() => OfflineStorage.loadSnapshot(), []);
@@ -292,6 +416,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [preselectedBookingRoom, setPreselectedBookingRoom] = useState<{
+    roomNumber: string;
+    buildingName?: string;
+  } | null>(null);
   const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
   const [isAddScheduleOpen, setIsAddScheduleOpen] = useState(false);
 
@@ -314,28 +442,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Data states initialized from offline cache / localStorage
   const [courses, setCourses] = useState<CourseRecord[]>(cachedSnapshot.courses || DEFAULT_OFFLINE_COURSES);
-  const [teachersList, setTeachersList] = useState<AuthUser[]>([
-    DEFAULT_DEMO_TEACHER,
-    {
-      id: 'usr-teacher-2',
-      email: 'danial@unicampus.kz',
-      full_name: 'Prof. Danial R.',
-      role: 'teacher',
-      department: 'Department of Computer Science & Mathematics',
-    },
-  ]);
-  const [studentsList, setStudentsList] = useState<AuthUser[]>([
-    DEFAULT_DEMO_STUDENT,
-    { id: 'usr-student-2', email: 'alisher@unicampus.kz', full_name: 'Alisher Nurlanov', role: 'student', group_name: 'CS-2401', gpa: 3.25 },
-    { id: 'usr-student-3', email: 'dana@unicampus.kz', full_name: 'Dana Suleimenova', role: 'student', group_name: 'CS-2401', gpa: 3.92 },
-    { id: 'usr-student-4', email: 'madina@unicampus.kz', full_name: 'Madina Karimova', role: 'student', group_name: 'SE-2402', gpa: 3.67 },
-    { id: 'usr-student-5', email: 'timur@unicampus.kz', full_name: 'Timur Bekzhanov', role: 'student', group_name: 'SE-2402', gpa: 2.85 },
-  ]);
+  const [teachersList, setTeachersList] = useState<AuthUser[]>(() =>
+    OFFLINE_ACCOUNT_DIRECTORY.filter((u) => u.role === 'teacher')
+  );
+  const [studentsList, setStudentsList] = useState<AuthUser[]>(() =>
+    OFFLINE_ACCOUNT_DIRECTORY.filter((u) => u.role === 'student')
+  );
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0);
   const [grades, setGrades] = useState<GradeRecord[]>(cachedSnapshot.grades || DEFAULT_OFFLINE_GRADES);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(
     cachedSnapshot.attendance || DEFAULT_OFFLINE_ATTENDANCE
   );
   const [roomBookings, setRoomBookings] = useState<RoomBooking[]>(cachedSnapshot.bookings || []);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(
+    cachedSnapshot.announcements?.length ? cachedSnapshot.announcements : RECENT_ANNOUNCEMENTS
+  );
+  const [studentLifeEvents, setStudentLifeEvents] = useState<StudentLifeEvent[]>(
+    cachedSnapshot.studentLifeEvents?.length ? cachedSnapshot.studentLifeEvents : DEFAULT_STUDENT_LIFE_EVENTS
+  );
+  const [lmsIntegrations, setLmsIntegrations] = useState<LmsIntegrationItem[]>(DEFAULT_LMS_INTEGRATIONS);
+  const [aiQuota, setAiQuota] = useState<AIQuotaInfo>({
+    usedTokens: 1420,
+    monthlyQuota: 10000,
+    queriesCount: 14,
+    tier: 'B2B Institutional Metered Tier',
+  });
 
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>(() => {
     try {
@@ -415,10 +546,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       assignments,
       courses,
       bookings: roomBookings,
+      announcements,
+      studentLifeEvents,
     });
     setLastSyncedAt(snap.lastSyncedAt);
     setIsOfflineMode(true);
-  }, [scheduleItems, grades, courses, attendance, assignments, roomBookings, setIsOfflineMode]);
+  }, [
+    scheduleItems,
+    grades,
+    courses,
+    attendance,
+    assignments,
+    roomBookings,
+    announcements,
+    studentLifeEvents,
+    setIsOfflineMode,
+  ]);
 
   const refreshFromBackend = useCallback(async () => {
     if (isOfflineMode) return;
@@ -433,6 +576,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.grades.length > 0) setGrades(data.grades);
       if (data.attendance.length > 0) setAttendance(data.attendance);
       if (data.bookings.length > 0) setRoomBookings(data.bookings);
+      if (data.announcements && data.announcements.length > 0) setAnnouncements(data.announcements);
+      if (data.studentLifeEvents && data.studentLifeEvents.length > 0) {
+        setStudentLifeEvents(data.studentLifeEvents);
+      }
+      if (data.lmsIntegrations && data.lmsIntegrations.length > 0) {
+        setLmsIntegrations(data.lmsIntegrations);
+      }
+      if (data.aiQuota) {
+        setAiQuota(data.aiQuota);
+      }
 
       if (data.schedule.length > 0) {
         setScheduleItems((prev) => {
@@ -475,6 +628,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         assignments: data.assignments.length > 0 ? data.assignments : undefined,
         courses: data.courses.length > 0 ? data.courses : undefined,
         bookings: data.bookings,
+        announcements: data.announcements?.length ? data.announcements : undefined,
+        studentLifeEvents: data.studentLifeEvents?.length ? data.studentLifeEvents : undefined,
       });
       setLastSyncedAt(snap.lastSyncedAt);
     } catch {
@@ -498,38 +653,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await refreshFromBackend();
       return user;
     } catch (err) {
-      // Offline / Demo fallback if local backend isn't running yet
+      // Offline / local fallback against the institutional account directory
       const lower = email.trim().toLowerCase();
-      if (lower.includes('admin') && (password === 'admin123' || password === 'password123')) {
-        const demoAdmin: AuthUser = {
-          ...DEFAULT_DEMO_ADMIN,
-          email: lower,
-        };
-        setStoredAuth('offline-demo-token-admin', demoAdmin);
-        setCurrentUser(demoAdmin);
-        return demoAdmin;
-      }
-      if (
-        (lower.includes('teacher') || lower.includes('yersultan') || lower.includes('danial')) &&
-        (password === 'teacher123' || password === 'password123')
-      ) {
-        const demoTeacher: AuthUser = {
-          ...DEFAULT_DEMO_TEACHER,
-          email: lower,
-          full_name: lower.includes('danial') ? 'Prof. Danial R.' : 'Dr. Yersultan M.',
-        };
-        setStoredAuth('offline-demo-token-teacher', demoTeacher);
-        setCurrentUser(demoTeacher);
-        return demoTeacher;
-      }
-      if (password === 'student123' || password === 'password123') {
-        const demoStudent: AuthUser = {
-          ...DEFAULT_DEMO_STUDENT,
-          email: lower,
-        };
-        setStoredAuth('offline-demo-token-student', demoStudent);
-        setCurrentUser(demoStudent);
-        return demoStudent;
+      const directoryMatch = OFFLINE_ACCOUNT_DIRECTORY.find((u) => u.email.toLowerCase() === lower);
+      if (directoryMatch) {
+        const expectedPass =
+          directoryMatch.role === 'admin'
+            ? 'admin123'
+            : directoryMatch.role === 'teacher'
+              ? 'teacher123'
+              : 'student123';
+        if (password === expectedPass || password === 'password123') {
+          setStoredAuth(`offline-token-${directoryMatch.id}`, directoryMatch);
+          setCurrentUser(directoryMatch);
+          return directoryMatch;
+        }
       }
       throw err;
     }
@@ -542,6 +680,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     role: UserRole;
     group_name?: string;
     department?: string;
+    enrolled_course_ids?: string[];
+    course_code?: string;
+    course_title?: string;
   }): Promise<AuthUser> => {
     try {
       const { user } = await ApiService.register(payload);
@@ -551,6 +692,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return user;
     } catch {
       // Offline fallback registration
+      const enrolledIds =
+        payload.role === 'student'
+          ? payload.enrolled_course_ids?.length
+            ? payload.enrolled_course_ids
+            : courses.map((c) => c.id)
+          : [];
       const fallbackUser: AuthUser = {
         id: `usr-${payload.role}-${Date.now()}`,
         email: payload.email.trim().toLowerCase(),
@@ -558,7 +705,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         role: payload.role,
         group_name: payload.role === 'student' ? payload.group_name || 'CS-2401' : null,
         department: payload.role !== 'student' ? payload.department || 'Computer Science' : null,
-        gpa: 3.78,
+        enrolled_course_ids: enrolledIds,
+        gpa: payload.role === 'student' ? 3.33 : undefined,
       };
       setStoredAuth(`offline-token-${Date.now()}`, fallbackUser);
       setCurrentUser(fallbackUser);
@@ -566,23 +714,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setStudentsList((prev) => [...prev, fallbackUser]);
       } else if (payload.role === 'teacher') {
         setTeachersList((prev) => [...prev, fallbackUser]);
+        if (payload.course_code && payload.course_title) {
+          const newCourse: CourseRecord = {
+            id: `crs-${payload.course_code.toLowerCase()}-${Date.now().toString().slice(-4)}`,
+            code: payload.course_code.trim().toUpperCase(),
+            title: payload.course_title.trim(),
+            credits: 5,
+            teacher_id: fallbackUser.id,
+            teacher_name: fallbackUser.full_name,
+          };
+          setCourses((prev) => [...prev, newCourse]);
+        }
       }
       return fallbackUser;
-    }
-  };
-
-  const switchDemoRole = async (role: UserRole) => {
-    const creds =
-      role === 'admin'
-        ? { email: 'admin@unicampus.kz', pass: 'admin123', fallback: DEFAULT_DEMO_ADMIN }
-        : role === 'teacher'
-        ? { email: 'teacher@unicampus.kz', pass: 'teacher123', fallback: DEFAULT_DEMO_TEACHER }
-        : { email: 'student@unicampus.kz', pass: 'student123', fallback: DEFAULT_DEMO_STUDENT };
-    try {
-      await loginWithCredentials(creds.email, creds.pass);
-    } catch {
-      setStoredAuth(`demo-token-${role}`, creds.fallback);
-      setCurrentUser(creds.fallback);
     }
   };
 
@@ -595,7 +739,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | AssignmentStatus>('all');
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('all');
 
-  const unreadAnnouncementsCount = RECENT_ANNOUNCEMENTS.filter((a) => a.unread).length;
+  const unreadAnnouncementsCount = useMemo(
+    () => announcements.filter((a) => a.unread).length,
+    [announcements]
+  );
+
+  const pushLocalAnnouncement = useCallback(
+    (payload: {
+      title: string;
+      description: string;
+      courseCode?: string;
+      room?: string;
+      type?: Announcement['type'];
+    }) => {
+      const nextItem: Announcement = {
+        id: `ann-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        title: payload.title,
+        description: payload.description,
+        courseCode: payload.courseCode,
+        room: payload.room,
+        timestamp: 'Just now',
+        createdAt: new Date().toISOString(),
+        unread: true,
+        type: payload.type || 'admin',
+      };
+      setAnnouncements((prev) => {
+        const next = [nextItem, ...prev];
+        OfflineStorage.saveSnapshot({ announcements: next });
+        return next;
+      });
+    },
+    []
+  );
+
+  const openRoomBookingFor = useCallback((roomNumber: string, buildingName?: string) => {
+    setPreselectedBookingRoom({ roomNumber, buildingName });
+    setIsBookingOpen(true);
+  }, []);
 
   const navigateToClassroom = (room: string) => {
     setSelectedRoomForNav(room);
@@ -663,8 +843,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setScheduleItems((prev) => [...prev, created]);
 
+    pushLocalAnnouncement({
+      title: `Schedule Added: ${created.courseCode || created.courseName}`,
+      courseCode: created.courseCode,
+      room: created.room,
+      description: `${created.day} ${created.startTime}–${created.endTime} in Room ${created.room}.`,
+      type: 'schedule_change',
+    });
+
     if (!isOfflineMode) {
-      ApiService.createScheduleItem(item).catch(() => {});
+      ApiService.createScheduleItem(item)
+        .then(() => ApiService.getAnnouncements().then(setAnnouncements).catch(() => {}))
+        .catch(() => {});
     }
 
     if (homework && homework.title.trim()) {
@@ -672,12 +862,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         created.courseName,
         created.courseCode,
         homework.title,
-        homework.dueDate || 'Oct 28',
+        homework.dueDate || formatShortMonthDay(2),
         homework.daysLeft ?? 2
       );
     }
 
     return created;
+  };
+
+  const importTeacherSchedule = async (
+    items: Array<Omit<ScheduleItem, 'id'>>,
+    replaceWeekStart?: string
+  ): Promise<void> => {
+    const localItems: ScheduleItem[] = items.map((item, idx) => {
+      const matchedCourse = courses.find(
+        (c) =>
+          (item.courseId && c.id === item.courseId) ||
+          c.code.toUpperCase() === String(item.courseCode || '').toUpperCase()
+      );
+      return {
+        ...item,
+        id: `sched-imp-${Date.now()}-${idx}`,
+        courseId: item.courseId || matchedCourse?.id,
+        professor: item.professor || matchedCourse?.teacher_name || 'Dr. Yersultan M.',
+        weekStart: item.weekStart || replaceWeekStart || 'recurring',
+      };
+    });
+
+    setScheduleItems((prev) => {
+      const filtered =
+        replaceWeekStart && replaceWeekStart !== 'recurring'
+          ? prev.filter((s) => s.weekStart !== replaceWeekStart)
+          : prev;
+      const next = [...filtered, ...localItems];
+      OfflineStorage.saveSnapshot({ schedule: next });
+      return next;
+    });
+
+    pushLocalAnnouncement({
+      title: `Schedule Imported (${localItems.length} classes)`,
+      courseCode: localItems[0]?.courseCode,
+      room: localItems[0]?.room,
+      description: `${localItems.length} timetable classes synced${
+        replaceWeekStart && replaceWeekStart !== 'recurring' ? ` for week ${replaceWeekStart}` : ''
+      }.`,
+      type: 'schedule_change',
+    });
+
+    if (!isOfflineMode) {
+      try {
+        const saved = await ApiService.importScheduleItems(items, replaceWeekStart);
+        if (saved.length > 0) {
+          setScheduleItems((prev) => {
+            const nonTemp = prev.filter((p) => !p.id.startsWith('sched-imp-'));
+            return [...nonTemp, ...saved];
+          });
+        }
+        ApiService.getAnnouncements().then(setAnnouncements).catch(() => {});
+      } catch {
+        // Optimistic import retained
+      }
+    }
   };
 
   const updateScheduleClass = async (
@@ -690,10 +935,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return next;
     });
 
+    if (payload.room || payload.startTime || payload.day) {
+      const target = scheduleItems.find((s) => s.id === id);
+      pushLocalAnnouncement({
+        title: `Schedule Updated: ${payload.courseCode || target?.courseCode || target?.courseName || 'Class'}`,
+        courseCode: payload.courseCode || target?.courseCode,
+        room: payload.room || target?.room,
+        description: `Moved to ${payload.day || target?.day || 'Scheduled day'} at ${payload.startTime || target?.startTime || 'class time'}, Room ${payload.room || target?.room || 'Campus'}.`,
+        type: 'schedule_change',
+      });
+    }
+
     if (!isOfflineMode) {
       try {
         const updated = await ApiService.updateScheduleItem(id, payload);
         setScheduleItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
+        ApiService.getAnnouncements().then(setAnnouncements).catch(() => {});
       } catch {
         // Optimistic update already saved
       }
@@ -702,7 +959,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const removeScheduleItem = (id: string) => {
     setScheduleItems((prev) => prev.filter((item) => item.id !== id));
-    if (!isOfflineMode) {
+    if (!isOfflineMode && userRole !== 'student') {
       ApiService.deleteScheduleItem(id).catch(() => {});
     }
   };
@@ -715,6 +972,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setScheduleItems(WEEKLY_SCHEDULE);
   };
 
+  const SAVED_SCHEDULE_BACKUP_KEY = 'unicampus_saved_schedule_backup_v1';
+
+  const saveScheduleBackup = () => {
+    try {
+      localStorage.setItem(SAVED_SCHEDULE_BACKUP_KEY, JSON.stringify(scheduleItems));
+    } catch {
+      // ignore storage quota errors
+    }
+  };
+
+  const restoreSavedSchedule = () => {
+    try {
+      const raw = localStorage.getItem(SAVED_SCHEDULE_BACKUP_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ScheduleItem[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setScheduleItems(parsed);
+          return;
+        }
+      }
+    } catch {
+      // fallback to default weekly schedule
+    }
+    setScheduleItems(WEEKLY_SCHEDULE);
+  };
+
   const removeAssignment = (id: string) => {
     setAssignments((prev) => prev.filter((item) => item.id !== id));
     if (!isOfflineMode) {
@@ -723,26 +1006,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleAssignmentStatus = (id: string) => {
-    setAssignments((prev) =>
-      prev.map((item) => {
+    let nextStatus: AssignmentStatus = 'submitted';
+    setAssignments((prev) => {
+      const next = prev.map((item) => {
         if (item.id === id) {
-          const nextStatus: AssignmentStatus = item.status === 'todo' ? 'submitted' : 'todo';
+          nextStatus = item.status === 'todo' ? 'submitted' : 'todo';
           return { ...item, status: nextStatus };
         }
         return item;
-      })
-    );
+      });
+      OfflineStorage.saveSnapshot({ assignments: next });
+      return next;
+    });
+
+    if (!isOfflineMode) {
+      ApiService.updateAssignment(id, { status: nextStatus }).catch(() => {});
+    }
   };
 
   const addPersonalNote = (id: string, note: string) => {
-    setAssignments((prev) =>
-      prev.map((item) => {
+    setAssignments((prev) => {
+      const next = prev.map((item) => {
         if (item.id === id) {
-          return { ...item, hasPersonalNote: true, personalNote: note };
+          return { ...item, hasPersonalNote: Boolean(note.trim()), personalNote: note };
         }
         return item;
-      })
-    );
+      });
+      OfflineStorage.saveSnapshot({ assignments: next });
+      return next;
+    });
+
+    if (!isOfflineMode) {
+      ApiService.updateAssignment(id, { personal_note: note }).catch(() => {});
+    }
   };
 
   // Admin Actions: Create / Update / Delete Subject & Bind Teachers
@@ -936,6 +1232,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return next;
     });
 
+    pushLocalAnnouncement({
+      title: `Grade Posted: ${optimistic.course_code} ${optimistic.category}`,
+      courseCode: optimistic.course_code,
+      description: `Score ${optimistic.score}/100 recorded${optimistic.feedback ? ` — "${optimistic.feedback}"` : ''}. GPA recalculated.`,
+      type: optimistic.score >= 85 ? 'scholarship' : 'admin',
+    });
+
     if (!isOfflineMode) {
       try {
         const saved = await ApiService.saveGrade({
@@ -953,6 +1256,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             )
           );
         }
+        ApiService.getAnnouncements().then(setAnnouncements).catch(() => {});
       } catch {
         // Optimistic update already saved locally
       }
@@ -1048,6 +1352,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return next;
     });
 
+    pushLocalAnnouncement({
+      title: `New Deadline: ${optimistic.title}`,
+      courseCode: optimistic.courseCode,
+      description: `${optimistic.category} (${optimistic.weight}) due ${optimistic.dueFormatted} for ${optimistic.groupName}.`,
+      type: 'deadline',
+    });
+
     if (!isOfflineMode) {
       try {
         const created = await ApiService.createAssignment({
@@ -1063,8 +1374,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAssignments((prev) =>
           prev.map((a) => (a.id === optimistic.id ? created : a))
         );
+        ApiService.getAnnouncements().then(setAnnouncements).catch(() => {});
       } catch {
         // Already added optimistically
+      }
+    }
+  };
+
+  const updateTeacherTask = async (
+    id: string,
+    payload: {
+      title?: string;
+      description?: string;
+      due_date?: string;
+      category?: AssessmentCategory;
+      weight?: string;
+      group_name?: string;
+      course_id?: string;
+      course_code?: string;
+    }
+  ): Promise<void> => {
+    const courseObj = courses.find(
+      (c) => c.id === payload.course_id || c.code === payload.course_code
+    );
+
+    setAssignments((prev) => {
+      const next = prev.map((a) => {
+        if (a.id !== id) return a;
+        const dueFormatted = payload.due_date !== undefined ? payload.due_date : a.dueFormatted;
+        const shortDue = dueFormatted.split(',')[0].replace(/^Due\s+/i, '');
+        return {
+          ...a,
+          title: payload.title !== undefined ? payload.title.trim() : a.title,
+          description: payload.description !== undefined ? payload.description : a.description,
+          dueFormatted,
+          dueDate: `Due ${shortDue}`,
+          category: payload.category !== undefined ? payload.category : a.category,
+          weight: payload.weight !== undefined ? payload.weight : a.weight,
+          groupName: payload.group_name !== undefined ? payload.group_name : a.groupName,
+          courseId: courseObj?.id || payload.course_id || a.courseId,
+          courseCode: courseObj?.code || payload.course_code || a.courseCode,
+          courseName: courseObj?.title || a.courseName,
+        };
+      });
+      OfflineStorage.saveSnapshot({ assignments: next });
+      return next;
+    });
+
+    if (!isOfflineMode) {
+      try {
+        const updated = await ApiService.updateAssignment(id, {
+          title: payload.title,
+          description: payload.description,
+          due_date: payload.due_date,
+          category: payload.category,
+          weight: payload.weight,
+          group_name: payload.group_name,
+          course_id: courseObj?.id || payload.course_id,
+        });
+        setAssignments((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      } catch {
+        // Optimistic update kept
       }
     }
   };
@@ -1135,6 +1505,352 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Announcements, Student Life Events, LMS Middleware Sync, AI Academic Advisor
+  const markAnnouncementRead = async (id: string, unread = false) => {
+    setAnnouncements((prev) => {
+      const next = prev.map((a) => (a.id === id ? { ...a, unread } : a));
+      OfflineStorage.saveSnapshot({ announcements: next });
+      return next;
+    });
+    if (!isOfflineMode) {
+      ApiService.markAnnouncementRead(id, unread).catch(() => {});
+    }
+  };
+
+  const markAllAnnouncementsRead = async () => {
+    setAnnouncements((prev) => {
+      const next = prev.map((a) => ({ ...a, unread: false }));
+      OfflineStorage.saveSnapshot({ announcements: next });
+      return next;
+    });
+    if (!isOfflineMode) {
+      ApiService.markAllAnnouncementsRead().catch(() => {});
+    }
+  };
+
+  const createCustomAnnouncement = async (payload: {
+    title: string;
+    description: string;
+    courseCode?: string;
+    room?: string;
+    type?: Announcement['type'];
+  }) => {
+    pushLocalAnnouncement(payload);
+    if (!isOfflineMode) {
+      try {
+        await ApiService.createAnnouncement({
+          title: payload.title,
+          description: payload.description,
+          course_code: payload.courseCode,
+          room: payload.room,
+          type: payload.type,
+        });
+      } catch {
+        // Saved optimistically
+      }
+    }
+  };
+
+  const toggleEventRegistration = async (id: string) => {
+    setStudentLifeEvents((prev) => {
+      const next = prev.map((e) => (e.id === id ? { ...e, registered: !e.registered } : e));
+      OfflineStorage.saveSnapshot({ studentLifeEvents: next });
+      return next;
+    });
+    if (!isOfflineMode) {
+      try {
+        const updated = await ApiService.toggleStudentLifeRegistration(id);
+        setStudentLifeEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
+      } catch {
+        // Optimistic toggle kept
+      }
+    }
+  };
+
+  const createStudentLifeEvent = async (payload: {
+    title: string;
+    organizer: string;
+    category: StudentLifeEvent['category'];
+    date: string;
+    location: string;
+    room?: string;
+    prizeOrPerks?: string;
+    isSponsored?: boolean;
+    description: string;
+  }) => {
+    const optimistic: StudentLifeEvent = {
+      id: `evt-${Date.now()}`,
+      title: payload.title.trim(),
+      organizer: payload.organizer.trim(),
+      category: payload.category,
+      date: payload.date,
+      location: payload.location,
+      room: payload.room || 'ATRIUM',
+      prizeOrPerks: payload.prizeOrPerks,
+      isSponsored: Boolean(payload.isSponsored),
+      registered: false,
+      description: payload.description,
+    };
+    setStudentLifeEvents((prev) => {
+      const next = [optimistic, ...prev];
+      OfflineStorage.saveSnapshot({ studentLifeEvents: next });
+      return next;
+    });
+    pushLocalAnnouncement({
+      title: `New Campus Event: ${optimistic.title}`,
+      room: optimistic.room,
+      description: `${optimistic.organizer} • ${optimistic.date} at ${optimistic.location}.`,
+      type: 'admin',
+    });
+    if (!isOfflineMode) {
+      try {
+        const created = await ApiService.createStudentLifeEvent({
+          title: optimistic.title,
+          organizer: optimistic.organizer,
+          category: optimistic.category,
+          date: optimistic.date,
+          location: optimistic.location,
+          room: optimistic.room,
+          prize_or_perks: optimistic.prizeOrPerks,
+          is_sponsored: optimistic.isSponsored,
+          description: optimistic.description,
+        });
+        setStudentLifeEvents((prev) => prev.map((e) => (e.id === optimistic.id ? created : e)));
+      } catch {
+        // Optimistic item kept
+      }
+    }
+  };
+
+  const syncLmsProvider = async (provider = 'all') => {
+    setLmsIntegrations((prev) =>
+      prev.map((item) =>
+        provider === 'all' || item.id === provider ? { ...item, status: 'syncing' } : item
+      )
+    );
+    if (!isOfflineMode) {
+      try {
+        const updated = await ApiService.syncIntegration(provider);
+        setLmsIntegrations(updated);
+        return;
+      } catch {
+        // Fall through to local snapshot sync timestamp
+      }
+    }
+    const now = new Date().toISOString();
+    setLmsIntegrations((prev) =>
+      prev.map((item) =>
+        provider === 'all' || item.id === provider
+          ? {
+              ...item,
+              status: 'connected',
+              lastSyncedAt: now,
+              syncedCourses: courses.length,
+              syncedGrades: grades.length,
+              syncedStudents: studentsList.length,
+            }
+          : item
+      )
+    );
+  };
+
+  const askAI = async (
+    prompt: string
+  ): Promise<{
+    reply: string;
+    recommendedRoom: string | null;
+    recommendedTab: string | null;
+    provider: string;
+  }> => {
+    if (!isOfflineMode) {
+      try {
+        const result = await ApiService.askAIAdvisor({
+          prompt,
+          userId: currentUser?.id,
+          groupName: currentUser?.group_name ?? undefined,
+        });
+        setAiQuota(result.quota);
+        return {
+          reply: result.reply,
+          recommendedRoom: result.recommendedRoom,
+          recommendedTab: result.recommendedTab,
+          provider: result.provider,
+        };
+      } catch {
+        // Fall back to on-device contextual AI computation
+      }
+    }
+
+    const q = prompt.toLowerCase();
+    const liveGpa = computeDynamicGpa(grades, courses);
+    const standardThreshold = 2.33;
+    const increasedThreshold = 3.66;
+    const margin = Number((liveGpa - standardThreshold).toFixed(2));
+    const todoTasks = assignments.filter((a) => a.status === 'todo');
+    const nextClass = scheduleItems[0];
+    const explicitRoom = prompt.match(/C1\.\d\.\d{3}/i)?.[0]?.toUpperCase();
+
+    let reply = '';
+    let recommendedRoom: string | null = null;
+    let recommendedTab: string | null = 'dashboard';
+
+    if (/where|room|map|floor|301|320|136|246|105|library|atrium/.test(q) && !/next|class/.test(q)) {
+      const target =
+        explicitRoom ||
+        (q.includes('136') || q.includes('105')
+          ? 'C1.2.136'
+          : q.includes('246')
+            ? 'C1.3.246'
+            : q.includes('library')
+              ? 'LIBRARY'
+              : 'C1.1.320');
+      reply = `Room ${target} is ready on your interactive AITU Campus Map. Tap "Open Map to ${target}" below to zoom directly onto the room and highlight it.`;
+      recommendedRoom = target;
+      recommendedTab = 'map';
+    } else if (/next|schedule|class|lecture|today/.test(q)) {
+      const room = nextClass?.room || 'C1.1.320';
+      reply = nextClass
+        ? `Your next class is ${nextClass.courseName} (${nextClass.courseCode}) on ${nextClass.day}, ${nextClass.startTime}–${nextClass.endTime} in Room ${room}.`
+        : 'No classes are currently scheduled for today.';
+      recommendedRoom = nextClass ? room : null;
+      recommendedTab = 'map';
+    } else if (/gpa|scholarship|grade|exam|final|score|calculate/.test(q)) {
+      const lowestGrade = [...grades].sort((a, b) => Number(a.score) - Number(b.score))[0];
+      const lowScore = lowestGrade ? Number(lowestGrade.score) : 85;
+      const neededFinal = Math.max(50, Math.min(100, Math.ceil((90 - lowScore * 0.6) / 0.4)));
+      const tierText =
+        liveGpa >= increasedThreshold
+          ? `Increased Scholarship (GPA >= ${increasedThreshold.toFixed(2)})`
+          : liveGpa >= standardThreshold
+            ? `Standard Scholarship Retained (+${margin.toFixed(2)} above ${standardThreshold.toFixed(2)}; ${increasedThreshold.toFixed(2)} for Increased)`
+            : `At Risk (${Math.abs(margin).toFixed(2)} below ${standardThreshold.toFixed(2)} Standard Scholarship threshold)`;
+      reply = `Live GPA: ${liveGpa.toFixed(2)} — ${tierText}. Lowest grade: ${lowestGrade?.course_code || 'PHYS101'} (${lowScore}%). Scoring ${neededFinal}%+ on the Final strengthens your scholarship standing.`;
+      recommendedTab = 'grades';
+    } else if (/due|deadline|assignment|task|todo/.test(q)) {
+      const summary = todoTasks
+        .slice(0, 3)
+        .map((t, idx) => `${idx + 1}. ${t.title} (${t.courseCode}, ${t.weight}) — ${t.dueDate}`)
+        .join('\n');
+      reply =
+        todoTasks.length > 0
+          ? `You have ${todoTasks.length} pending deadline(s):\n${summary}`
+          : 'You have 0 pending assignments right now.';
+      recommendedTab = 'assignments';
+    } else {
+      const room = nextClass?.room || 'C1.1.320';
+      reply = `UniCampus AI Summary:\n• Live GPA: ${liveGpa.toFixed(2)} (Standard >= 2.33, Increased >= 3.66)\n• Next Class: ${
+        nextClass ? `${nextClass.courseCode} ${nextClass.day} ${nextClass.startTime} in ${room}` : 'None'
+      }\n• Pending Tasks: ${todoTasks.length}`;
+      recommendedRoom = nextClass ? room : null;
+    }
+
+    const estTokens = Math.max(85, Math.min(420, Math.round((prompt.length + reply.length) / 3) + 55));
+    setAiQuota((prev) => ({
+      ...prev,
+      usedTokens: prev.usedTokens + estTokens,
+      queriesCount: prev.queriesCount + 1,
+    }));
+
+    return {
+      reply,
+      recommendedRoom,
+      recommendedTab,
+      provider: isOfflineMode ? 'unicampus-offline-advisor' : 'unicampus-contextual-fallback',
+    };
+  };
+
+  // Synchronize student schedule & assignments relationally with enrolled courses and assigned teachers
+  const synchronizedScheduleItems = useMemo(() => {
+    const enrolledIds =
+      userRole === 'student' && currentUser?.enrolled_course_ids?.length
+        ? new Set(currentUser.enrolled_course_ids)
+        : null;
+
+    return scheduleItems
+      .map((item) => {
+        const matchedCourse = courses.find(
+          (c) =>
+            (item.courseId && c.id === item.courseId) ||
+            c.code.toUpperCase() === item.courseCode.toUpperCase()
+        );
+        return matchedCourse
+          ? {
+              ...item,
+              courseId: item.courseId || matchedCourse.id,
+              professor: matchedCourse.teacher_name || item.professor,
+            }
+          : item;
+      })
+      .filter((item) => {
+        if (userRole === 'teacher' && currentUser?.id) {
+          const matchedCourse = courses.find(
+            (c) =>
+              (item.courseId && c.id === item.courseId) ||
+              c.code.toUpperCase() === item.courseCode.toUpperCase()
+          );
+          return matchedCourse ? matchedCourse.teacher_id === currentUser.id : false;
+        }
+        if (userRole !== 'student') return true;
+        if (
+          currentUser?.group_name &&
+          item.groupName &&
+          item.groupName !== 'ALL' &&
+          item.groupName !== currentUser.group_name
+        ) {
+          return false;
+        }
+        if (enrolledIds) {
+          const matchedCourse = courses.find(
+            (c) =>
+              (item.courseId && c.id === item.courseId) ||
+              c.code.toUpperCase() === item.courseCode.toUpperCase()
+          );
+          if (matchedCourse && !enrolledIds.has(matchedCourse.id)) {
+            return false;
+          }
+        }
+        return true;
+      });
+  }, [scheduleItems, courses, userRole, currentUser]);
+
+  const synchronizedAssignments = useMemo(() => {
+    const enrolledIds =
+      userRole === 'student' && currentUser?.enrolled_course_ids?.length
+        ? new Set(currentUser.enrolled_course_ids)
+        : null;
+
+    return assignments.filter((a) => {
+      if (userRole === 'teacher' && currentUser?.id) {
+        const matchedCourse = courses.find(
+          (c) =>
+            (a.courseId && c.id === a.courseId) ||
+            c.code.toUpperCase() === a.courseCode.toUpperCase()
+        );
+        return matchedCourse ? matchedCourse.teacher_id === currentUser.id : false;
+      }
+      if (userRole !== 'student') return true;
+      if (
+        currentUser?.group_name &&
+        a.groupName &&
+        a.groupName !== 'ALL' &&
+        a.groupName !== currentUser.group_name
+      ) {
+        return false;
+      }
+      if (enrolledIds) {
+        const matchedCourse = courses.find(
+          (c) =>
+            (a.courseId && c.id === a.courseId) ||
+            c.code.toUpperCase() === a.courseCode.toUpperCase()
+        );
+        if (matchedCourse && !enrolledIds.has(matchedCourse.id)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [assignments, courses, userRole, currentUser]);
+
   // Compute dynamic student profile object so existing components get real-time GPA & user info
   const studentProfile = useMemo(() => {
     const activeStudentId =
@@ -1149,6 +1865,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fullName = currentUser?.full_name || CURRENT_STUDENT.fullName;
     const firstName = fullName.split(' ')[0] || CURRENT_STUDENT.name;
 
+    const scholarshipStatus =
+      liveGpa >= 3.66
+        ? 'Increased Scholarship (GPA >= 3.66)'
+        : liveGpa >= 2.33
+          ? 'Standard Scholarship Retained (GPA >= 2.33)'
+          : 'At Risk (Below 2.33 Scholarship Threshold)';
+
     return {
       ...CURRENT_STUDENT,
       name: firstName,
@@ -1158,10 +1881,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       groupName: currentUser?.group_name || 'CS-2401',
       department: currentUser?.department || undefined,
       role: userRole,
-      scholarshipStatus:
-        liveGpa >= 3.5
-          ? 'Active (State Academic Grant)'
-          : 'Warning (Below 3.50 Scholarship Threshold)',
+      scholarshipStatus,
     };
   }, [currentUser, grades, courses, userRole]);
 
@@ -1186,7 +1906,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAuthModalOpen,
         loginWithCredentials,
         registerAccount,
-        switchDemoRole,
         logout,
         isSyncing,
         isColdStarting,
@@ -1202,19 +1921,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAIAssistantOpen,
         isBookingOpen,
         setIsBookingOpen,
+        preselectedBookingRoom,
+        setPreselectedBookingRoom,
+        openRoomBookingFor,
         isQuickActionsOpen,
         setIsQuickActionsOpen,
         isAddScheduleOpen,
         setIsAddScheduleOpen,
-        scheduleItems,
+        scheduleItems: synchronizedScheduleItems,
+        selectedWeekOffset,
+        setSelectedWeekOffset,
         addScheduleItem,
+        importTeacherSchedule,
         updateScheduleClass,
         removeScheduleItem,
         clearAllSchedule,
         resetDefaultSchedule,
+        saveScheduleBackup,
+        restoreSavedSchedule,
         addHomeworkForCourse,
         removeAssignment,
-        assignments,
+        assignments: synchronizedAssignments,
         assignmentFilter,
         setAssignmentFilter,
         selectedCourseFilter,
@@ -1234,10 +1961,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitTeacherGrade,
         submitTeacherAttendance,
         publishTeacherTask,
+        updateTeacherTask,
         createRoomBooking,
         updateRoomBookingStatus,
         isOfflineMode,
         setIsOfflineMode,
+        announcements,
+        markAnnouncementRead,
+        markAllAnnouncementsRead,
+        createCustomAnnouncement,
+        studentLifeEvents,
+        toggleEventRegistration,
+        createStudentLifeEvent,
+        lmsIntegrations,
+        syncLmsProvider,
+        aiQuota,
+        askAI,
         student: studentProfile,
         unreadAnnouncementsCount,
       }}

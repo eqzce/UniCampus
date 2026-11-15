@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { useApp } from '../../context/AppContext';
 import { CampusMapScreen } from '../map/CampusMapScreen';
+import { getWeekSummaryInfo, getTodayIsoDate, formatRelativeDue } from '../../utils/dateUtils';
 import type {
   AssessmentCategory,
   AttendanceStatusType,
@@ -23,25 +24,31 @@ import {
   Award,
   Sparkles,
   Pencil,
+  ChevronLeft,
+  ChevronRight,
+  Upload,
+  X,
 } from 'lucide-react';
 
 const GRADE_CATEGORIES = ['Assignment', 'Midterm 1', 'Midterm 2', 'Final'] as const;
-const STUDENT_GROUPS = ['ALL', 'CS-2401', 'SE-2402'] as const;
+const STUDENT_GROUPS = ['ALL', 'CS-2401', 'SE-2402', 'IT-2403'] as const;
 const SCHEDULE_DAYS: ScheduleItem['day'][] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const SCHEDULE_TIME_SLOTS = [
   { start: '09:00', end: '10:00', row: 0 },
   { start: '10:00', end: '11:00', row: 1 },
   { start: '11:00', end: '12:00', row: 2 },
   { start: '12:00', end: '13:00', row: 3 },
-  { start: '13:00', end: '14:00', row: 4 },
-  { start: '14:00', end: '15:00', row: 5 },
-  { start: '15:00', end: '16:00', row: 6 },
-  { start: '16:00', end: '17:00', row: 7 },
+  { start: '1:00', end: '2:00', row: 4 },
+  { start: '2:00', end: '3:00', row: 5 },
+  { start: '3:00', end: '4:00', row: 6 },
+  { start: '4:00', end: '5:00', row: 7 },
 ];
 const SCHEDULE_ROOMS = [
   { room: 'C1.1.320', building: 'AITU Block C1.1' },
   { room: 'C1.2.136', building: 'AITU Block C1.2' },
   { room: 'C1.3.246', building: 'AITU Block C1.3' },
+  { room: 'C1.1.140', building: 'AITU Block C1.1' },
+  { room: 'C1.2.246', building: 'AITU Block C1.2' },
 ];
 
 interface TeacherDashboardProps {
@@ -59,27 +66,49 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
     assignments,
     scheduleItems,
     roomBookings,
+    selectedWeekOffset,
+    setSelectedWeekOffset,
     submitTeacherGrade,
     submitTeacherAttendance,
     publishTeacherTask,
+    updateTeacherTask,
     removeAssignment,
     updateScheduleClass,
+    importTeacherSchedule,
     removeScheduleItem,
     updateRoomBookingStatus,
     setIsBookingOpen,
     setIsAddScheduleOpen,
     navigateToClassroom,
     isOfflineMode,
-    switchDemoRole,
   } = useApp();
 
   const activeTab = forcedTab || teacherActiveTab;
 
+  const teacherCourses = useMemo(() => {
+    if (currentUser?.role === 'teacher') {
+      const owned = courses.filter((c) => c.teacher_id === currentUser.id);
+      return owned.length > 0 ? owned : courses;
+    }
+    return courses;
+  }, [courses, currentUser]);
+
+  const assignedTeacherCourse = teacherCourses[0];
+
   // Shared filter states
   const [selectedCourseCode, setSelectedCourseCode] = useState<string>(
-    courses[0]?.code || 'PHYS101'
+    assignedTeacherCourse?.code || 'PHYS101'
   );
-  const [selectedGroup, setSelectedGroup] = useState<string>('CS-2401');
+  const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
+
+  useEffect(() => {
+    if (
+      teacherCourses.length > 0 &&
+      !teacherCourses.some((c) => c.code === selectedCourseCode)
+    ) {
+      setSelectedCourseCode(teacherCourses[0].code);
+    }
+  }, [teacherCourses, selectedCourseCode]);
 
   // Gradebook modal/inline editor state
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
@@ -89,20 +118,22 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
   const [gradeToast, setGradeToast] = useState<string | null>(null);
 
   // Attendance state
-  const [attendanceDate, setAttendanceDate] = useState<string>('2026-10-28');
+  const [attendanceDate, setAttendanceDate] = useState<string>(() => getTodayIsoDate());
   const [attendanceDraft, setAttendanceDraft] = useState<Record<string, AttendanceStatusType>>({});
   const [attendanceToast, setAttendanceToast] = useState<string | null>(null);
 
-  // Task / Deadline creator state
+  // Task / Deadline creator & editor state
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskCategory, setTaskCategory] = useState<AssessmentCategory>('assignment');
-  const [taskGroup, setTaskGroup] = useState('CS-2401');
-  const [taskDueDate, setTaskDueDate] = useState('Nov 06, 23:59');
+  const [taskGroup, setTaskGroup] = useState('ALL');
+  const [taskDueDate, setTaskDueDate] = useState(() => formatRelativeDue(3).dueFormatted);
   const [taskWeight, setTaskWeight] = useState('15%');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskToast, setTaskToast] = useState<string | null>(null);
 
-  // Schedule inline editor state
+  // Schedule calendar selection, inline editor & import state
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [editCourseName, setEditCourseName] = useState('');
   const [editCourseCode, setEditCourseCode] = useState('');
@@ -110,23 +141,38 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
   const [editStartTime, setEditStartTime] = useState('10:00');
   const [editRoom, setEditRoom] = useState('C1.1.320');
   const [editGroupName, setEditGroupName] = useState('CS-2401');
+  const [editWeekStart, setEditWeekStart] = useState('recurring');
   const [scheduleToast, setScheduleToast] = useState<string | null>(null);
+  const [isImportScheduleOpen, setIsImportScheduleOpen] = useState(false);
+  const [importCsvText, setImportCsvText] = useState(
+    'PHYS101,Wed,14:00,C1.1.320\nPHYS101,Fri,15:00,C1.1.140'
+  );
+  const [importScope, setImportScope] = useState<'week' | 'recurring'>('week');
+
+  const weekSummary = useMemo(() => getWeekSummaryInfo(selectedWeekOffset), [selectedWeekOffset]);
 
   const selectedCourseObj = useMemo(
-    () => courses.find((c) => c.code === selectedCourseCode) || courses[0],
-    [courses, selectedCourseCode]
+    () => teacherCourses.find((c) => c.code === selectedCourseCode) || teacherCourses[0],
+    [teacherCourses, selectedCourseCode]
   );
 
   const filteredStudents = useMemo(() => {
-    // Deduplicate by full_name so Arystan's two demo emails show cleanly
     const seenNames = new Set<string>();
     return studentsList.filter((st) => {
       if (selectedGroup !== 'ALL' && st.group_name !== selectedGroup) return false;
+      if (
+        selectedCourseObj &&
+        st.enrolled_course_ids &&
+        st.enrolled_course_ids.length > 0 &&
+        !st.enrolled_course_ids.includes(selectedCourseObj.id)
+      ) {
+        return false;
+      }
       if (seenNames.has(st.full_name)) return false;
       seenNames.add(st.full_name);
       return true;
     });
-  }, [studentsList, selectedGroup]);
+  }, [studentsList, selectedGroup, selectedCourseObj]);
 
   if (activeTab === 'map') {
     return <CampusMapScreen />;
@@ -205,72 +251,144 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
   const handlePublishTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskTitle.trim()) return;
-    await publishTeacherTask({
-      course_id: selectedCourseObj?.id,
-      course_code: selectedCourseCode,
-      group_name: taskGroup,
-      title: taskTitle.trim(),
-      description: taskDescription.trim(),
-      due_date: taskDueDate.trim() || 'Nov 06, 23:59',
-      category: taskCategory,
-      weight: taskWeight,
-    });
-    setTaskToast(`Published "${taskTitle.trim()}" to ${taskGroup}`);
+    if (editingTaskId) {
+      await updateTeacherTask(editingTaskId, {
+        course_id: selectedCourseObj?.id,
+        course_code: selectedCourseCode,
+        group_name: taskGroup,
+        title: taskTitle.trim(),
+        description: taskDescription.trim(),
+        due_date: taskDueDate.trim() || formatRelativeDue(3).dueFormatted,
+        category: taskCategory,
+        weight: taskWeight,
+      });
+      setTaskToast(`Updated "${taskTitle.trim()}"`);
+      setEditingTaskId(null);
+    } else {
+      await publishTeacherTask({
+        course_id: selectedCourseObj?.id,
+        course_code: selectedCourseCode,
+        group_name: taskGroup,
+        title: taskTitle.trim(),
+        description: taskDescription.trim(),
+        due_date: taskDueDate.trim() || formatRelativeDue(3).dueFormatted,
+        category: taskCategory,
+        weight: taskWeight,
+      });
+      setTaskToast(`Published "${taskTitle.trim()}" to ${taskGroup}`);
+    }
     setTaskTitle('');
     setTaskDescription('');
     setTimeout(() => setTaskToast(null), 3000);
   };
 
+  const handleImportCsvSchedule = async () => {
+    const slotMap: Record<string, { start: string; end: string; row: number }> = {
+      '09:00': { start: '09:00', end: '10:00', row: 0 },
+      '10:00': { start: '10:00', end: '11:00', row: 1 },
+      '11:00': { start: '11:00', end: '12:00', row: 2 },
+      '12:00': { start: '12:00', end: '13:00', row: 3 },
+      '13:00': { start: '1:00', end: '2:00', row: 4 },
+      '1:00': { start: '1:00', end: '2:00', row: 4 },
+      '14:00': { start: '2:00', end: '3:00', row: 5 },
+      '2:00': { start: '2:00', end: '3:00', row: 5 },
+      '15:00': { start: '3:00', end: '4:00', row: 6 },
+      '3:00': { start: '3:00', end: '4:00', row: 6 },
+      '16:00': { start: '4:00', end: '5:00', row: 7 },
+      '4:00': { start: '4:00', end: '5:00', row: 7 },
+    };
+
+    const rows = importCsvText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const parsed: Array<Omit<ScheduleItem, 'id'>> = rows.map((row, idx) => {
+      const [rawCode, rawDay, rawStart, rawRoom] = row.split(',').map((p) => p.trim());
+      const matchedCourse = courses.find(
+        (c) => c.code.toUpperCase() === (rawCode || selectedCourseCode).toUpperCase()
+      );
+      const dayVal = (SCHEDULE_DAYS.find((d) => d.toLowerCase() === (rawDay || '').toLowerCase()) ||
+        'Mon') as ScheduleItem['day'];
+      const slot = slotMap[rawStart || '10:00'] || slotMap['10:00'];
+      const targetWeek = importScope === 'week' ? weekSummary.activeWeekIso : 'recurring';
+      const palette: ScheduleItem['color'][] = ['blue', 'green', 'purple', 'orange', 'pink'];
+
+      return {
+        courseId: matchedCourse?.id || selectedCourseObj?.id,
+        courseCode: matchedCourse?.code || rawCode || selectedCourseCode,
+        courseName: matchedCourse?.title || selectedCourseObj?.title || rawCode || 'Course',
+        professor: matchedCourse?.teacher_name || currentUser?.full_name || 'Faculty',
+        day: dayVal,
+        startTime: slot.start,
+        endTime: slot.end,
+        timeRowIndex: slot.row,
+        durationHours: 1,
+        room: rawRoom || 'C1.1.320',
+        building: 'Main Campus',
+        groupName: 'CS-2401',
+        weekStart: targetWeek,
+        color: palette[idx % palette.length],
+      };
+    });
+
+    if (parsed.length === 0) return;
+    await importTeacherSchedule(
+      parsed,
+      importScope === 'week' ? weekSummary.activeWeekIso : undefined
+    );
+    setScheduleToast(
+      `Imported ${parsed.length} class sessions (${importScope === 'week' ? weekSummary.activeWeekIso : 'Recurring'})`
+    );
+    setIsImportScheduleOpen(false);
+    setTimeout(() => setScheduleToast(null), 3000);
+  };
+
   const getHeaderTitle = () => {
     switch (activeTab) {
       case 'gradebook':
-        return 'TEACHER GRADEBOOK';
+        return 'GRADES';
       case 'attendance':
-        return 'ATTENDANCE TRACKER';
+        return 'ATTENDANCE';
       case 'tasks':
-        return 'DEADLINE CREATOR';
+        return 'TASKS';
       case 'schedule':
-        return 'ROOMS & SCHEDULE';
+        return 'SCHEDULE';
       default:
-        return 'TEACHER PORTAL';
+        return 'TEACHER';
     }
   };
 
   return (
     <div className="flex flex-col h-full bg-[#f4f6fa] relative overflow-hidden select-none">
-      <Header
-        title={getHeaderTitle()}
-        subtitle={`${currentUser?.full_name || 'Dr. Yersultan M.'} · Faculty Portal`}
-      />
+      <Header title={getHeaderTitle()} />
 
       <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3 pb-20">
-        {/* Top Teacher Status & Role Switch Banner */}
+        {/* Top Teacher Sync Status Banner */}
         <div className="flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/70 rounded-xl px-3 py-2 text-xs text-emerald-950">
           <div className="flex items-center gap-1.5 font-semibold truncate">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
             <span className="truncate">
-              {isOfflineMode ? 'Offline Faculty Mode' : 'Live Synced with Student App'}
+              {isOfflineMode ? 'Offline Mode' : 'Live Synced'}
             </span>
           </div>
-          <button
-            onClick={() => switchDemoRole('student')}
-            className="text-[10.5px] font-bold text-[#18458b] bg-white hover:bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 shadow-2xs shrink-0 cursor-pointer"
-            title="Preview how changes appear in the Student interface"
-          >
-            View as Student →
-          </button>
+          {selectedCourseObj && (
+            <span className="text-[10.5px] font-bold text-emerald-800 bg-white/90 px-2.5 py-0.5 rounded-lg border border-emerald-200 shrink-0">
+              {selectedCourseObj.code}
+            </span>
+          )}
         </div>
 
-        {/* Course & Student Group Filter Bar (used in Gradebook & Attendance) */}
+        {/* Course & Student Group Filter Bar (used in Gradebook, Attendance & Tasks) */}
         {(activeTab === 'gradebook' || activeTab === 'attendance' || activeTab === 'tasks') && (
           <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 space-y-2.5">
             {/* Course Selector Chips */}
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Select Course
+                Course
               </span>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-                {courses.map((c) => {
+                {teacherCourses.map((c) => {
                   const active = c.code === selectedCourseCode;
                   return (
                     <button
@@ -647,18 +765,33 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
               onSubmit={handlePublishTask}
               className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 space-y-3"
             >
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#18458b] flex items-center justify-center">
-                  <CalendarPlus className="w-4 h-4" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#18458b] flex items-center justify-center">
+                    <CalendarPlus className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900">
+                      {editingTaskId ? 'Edit Homework / Exam Deadline' : 'Publish Homework / Exam Deadline'}
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      Immediately syncs to enrolled Student Tasks & Deadlines
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900">
-                    Publish Homework / Exam Deadline
-                  </h3>
-                  <p className="text-[10px] text-slate-400">
-                    Immediately syncs to Student Upcoming Deadlines & Grades
-                  </p>
-                </div>
+                {editingTaskId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingTaskId(null);
+                      setTaskTitle('');
+                      setTaskDescription('');
+                    }}
+                    className="text-[11px] font-bold text-slate-500 hover:text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg cursor-pointer"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
               </div>
 
               <div>
@@ -687,6 +820,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
                   >
                     <option value="CS-2401">CS-2401</option>
                     <option value="SE-2402">SE-2402</option>
+                    <option value="IT-2403">IT-2403</option>
                     <option value="ALL">All Groups</option>
                   </select>
                 </div>
@@ -756,7 +890,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
                 className="w-full py-2.5 rounded-xl bg-[#18458b] hover:bg-blue-900 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Publish Deadline to {taskGroup}</span>
+                <span>
+                  {editingTaskId ? 'Save Homework Changes' : `Publish Deadline to ${taskGroup}`}
+                </span>
               </button>
             </form>
 
@@ -765,7 +901,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
               <h4 className="text-xs font-bold text-slate-800">
                 Active Course Deadlines ({assignments.length})
               </h4>
-              {assignments.slice(0, 8).map((asg) => (
+              {assignments.map((asg) => (
                 <div
                   key={asg.id}
                   className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs"
@@ -782,13 +918,38 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
                     <p className="font-bold text-slate-800 truncate mt-0.5">{asg.title}</p>
                     <p className="text-[10px] text-slate-400">{asg.dueFormatted || asg.dueDate}</p>
                   </div>
-                  <button
-                    onClick={() => removeAssignment(asg.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
-                    title="Delete deadline"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTaskId(asg.id);
+                        setTaskTitle(asg.title);
+                        setTaskCategory(asg.category || 'assignment');
+                        setTaskGroup(asg.groupName || 'CS-2401');
+                        setTaskDueDate(asg.dueFormatted || asg.dueDate);
+                        setTaskWeight(asg.weight || '15%');
+                        setTaskDescription(asg.description || '');
+                        if (asg.courseCode) setSelectedCourseCode(asg.courseCode);
+                      }}
+                      className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg cursor-pointer"
+                      title={`Edit ${asg.title}`}
+                      aria-label={`Edit ${asg.title}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editingTaskId === asg.id) setEditingTaskId(null);
+                        removeAssignment(asg.id);
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
+                      title={`Delete ${asg.title}`}
+                      aria-label={`Delete ${asg.title}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -869,7 +1030,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
               </div>
             </div>
 
-            {/* Teaching Schedule Management (Edit, Add & Delete Classes) */}
+            {/* Teaching Schedule Management (Week Scroll, Import, Edit, Add & Delete Classes) */}
             <div className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 space-y-2.5">
               {scheduleToast && (
                 <div className="bg-emerald-600 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md flex items-center gap-2">
@@ -878,236 +1039,482 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ forcedTab })
                 </div>
               )}
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
                   <h3 className="text-xs font-bold text-slate-900">
-                    Manage University Schedule ({scheduleItems.length} Classes)
+                    Manage University Schedule ({scheduleItems.length} Total Classes)
                   </h3>
                   <p className="text-[10px] text-slate-400">
-                    Add, edit time/room, or delete classes — syncs immediately to Student Schedule
+                    Scroll weeks, import classes, edit time/room or delete — syncs to enrolled students
                   </p>
                 </div>
-                <button
-                  onClick={() => setIsAddScheduleOpen(true)}
-                  className="text-[11px] font-bold bg-[#18458b] hover:bg-blue-800 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Add Class</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsImportScheduleOpen((prev) => !prev)}
+                    className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>Import Schedule</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddScheduleOpen(true)}
+                    className="text-[11px] font-bold bg-[#18458b] hover:bg-blue-800 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Class</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                {scheduleItems.map((cls) => {
-                  const isEditingCls = editingScheduleId === cls.id;
-                  return (
-                    <div
-                      key={cls.id}
-                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2 text-xs"
+              {/* Scrollable Week Navigator for Teacher */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label="Teacher previous week"
+                    onClick={() => setSelectedWeekOffset((prev) => prev - 1)}
+                    className="w-7 h-7 rounded-full hover:bg-white flex items-center justify-center text-slate-600 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-bold text-slate-800 px-1">
+                    {weekSummary.rangeLabel}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Teacher next week"
+                    onClick={() => setSelectedWeekOffset((prev) => prev + 1)}
+                    className="w-7 h-7 rounded-full hover:bg-white flex items-center justify-center text-slate-600 cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-slate-500">
+                    Week {weekSummary.activeWeekIso}
+                  </span>
+                  {selectedWeekOffset !== 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWeekOffset(0)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-[#18458b] cursor-pointer"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-slate-900">
-                              {cls.day} {cls.startTime} · {cls.courseName}
-                            </span>
-                            <span className="text-[10px] font-semibold bg-white px-1.5 py-0.2 rounded border border-slate-200 text-slate-600">
-                              {cls.groupName || 'CS-2401'}
+                      Today
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Bulk Import Panel */}
+              {isImportScheduleOpen && (
+                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#18458b]">
+                      Batch Import Timetable (CSV: COURSE,Day,Time,Room)
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setImportScope('week')}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer ${
+                          importScope === 'week'
+                            ? 'bg-[#18458b] text-white'
+                            : 'bg-white text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        Week {weekSummary.activeWeekIso}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImportScope('recurring')}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer ${
+                          importScope === 'recurring'
+                            ? 'bg-[#18458b] text-white'
+                            : 'bg-white text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        Recurring
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={importCsvText}
+                    onChange={(e) => setImportCsvText(e.target.value)}
+                    className="w-full text-[11px] font-mono border border-blue-200 rounded-xl p-2 bg-white focus:outline-none"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsImportScheduleOpen(false)}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-white text-slate-600 border border-slate-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleImportCsvSchedule}
+                      className="text-[11px] font-bold px-3 py-1 rounded-lg bg-[#18458b] text-white cursor-pointer"
+                    >
+                      Import Classes Now
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {(() => {
+                const weekSchedule = scheduleItems.filter(
+                  (cls) =>
+                    !cls.weekStart ||
+                    cls.weekStart === 'recurring' ||
+                    cls.weekStart === weekSummary.activeWeekIso
+                );
+                const selectedCls =
+                  weekSchedule.find((c) => c.id === selectedScheduleId) || null;
+                const getCellColor = (color: ScheduleItem['color']) => {
+                  switch (color) {
+                    case 'orange':
+                      return 'bg-amber-100 text-amber-900 border-amber-300';
+                    case 'blue':
+                      return 'bg-blue-100 text-blue-900 border-blue-300';
+                    case 'purple':
+                      return 'bg-purple-100 text-purple-900 border-purple-300';
+                    case 'green':
+                      return 'bg-emerald-100 text-emerald-900 border-emerald-300';
+                    case 'pink':
+                      return 'bg-rose-100 text-rose-900 border-rose-300';
+                    case 'yellow':
+                      return 'bg-yellow-100 text-yellow-900 border-yellow-300';
+                    default:
+                      return 'bg-slate-100 text-slate-900 border-slate-300';
+                  }
+                };
+
+                return (
+                  <div className="space-y-3">
+                    {/* Calendar Grid matching Student Schedule */}
+                    <div className="bg-slate-50/40 rounded-xl p-2 border border-slate-200/80 overflow-x-auto">
+                      <div className="grid grid-cols-[40px_repeat(5,1fr)] text-center border-b border-slate-200/80 pb-1.5 mb-1">
+                        <div className="text-[10px] font-semibold text-slate-400"></div>
+                        {SCHEDULE_DAYS.map((day, idx) => (
+                          <div key={day} className="text-[11px] font-bold text-slate-700">
+                            {day}{' '}
+                            <span className="text-[9.5px] font-semibold text-slate-400">
+                              {weekSummary.days[idx]?.date}
                             </span>
                           </div>
-                          <p className="text-[10.5px] text-slate-500 mt-0.5">
-                            {cls.room} ({cls.building}) · {cls.professor}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (isEditingCls) {
-                                setEditingScheduleId(null);
-                              } else {
-                                setEditingScheduleId(cls.id);
-                                setEditCourseName(cls.courseName);
-                                setEditCourseCode(cls.courseCode);
-                                setEditDay(cls.day);
-                                setEditStartTime(cls.startTime);
-                                setEditRoom(cls.room);
-                                setEditGroupName(cls.groupName || 'CS-2401');
-                              }
-                            }}
-                            className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
-                            title="Edit schedule item"
-                          >
-                            <Pencil className="w-3 h-3" />
-                            <span>{isEditingCls ? 'Close' : 'Edit'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => navigateToClassroom(cls.room)}
-                            className="text-[10.5px] font-bold text-[#18458b] bg-white border border-blue-200 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
-                            title="Show room on map"
-                          >
-                            <MapPin className="w-3 h-3 text-blue-600" />
-                            <span>Map</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              removeScheduleItem(cls.id);
-                              setScheduleToast(`Removed "${cls.courseName}" (${cls.day} ${cls.startTime})`);
-                              setTimeout(() => setScheduleToast(null), 2500);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
-                            title="Delete class from schedule"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        ))}
                       </div>
 
-                      {isEditingCls && (
-                        <form
-                          onSubmit={async (e) => {
-                            e.preventDefault();
-                            const slot =
-                              SCHEDULE_TIME_SLOTS.find((s) => s.start === editStartTime) ||
-                              SCHEDULE_TIME_SLOTS[1];
-                            const roomObj =
-                              SCHEDULE_ROOMS.find((r) => r.room === editRoom) || SCHEDULE_ROOMS[0];
-                            await updateScheduleClass(cls.id, {
-                              courseName: editCourseName.trim() || cls.courseName,
-                              courseCode: editCourseCode.trim() || cls.courseCode,
-                              day: editDay,
-                              startTime: slot.start,
-                              endTime: slot.end,
-                              timeRowIndex: slot.row,
-                              room: roomObj.room,
-                              building: roomObj.building,
-                              groupName: editGroupName,
-                            });
-                            setEditingScheduleId(null);
-                            setScheduleToast(
-                              `Updated "${editCourseName}" → ${editDay} ${slot.start} (${roomObj.room})`
-                            );
-                            setTimeout(() => setScheduleToast(null), 3000);
-                          }}
-                          className="bg-white border border-blue-200 rounded-xl p-2.5 space-y-2 animate-in fade-in duration-150"
-                        >
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                                Subject / Course
-                              </label>
-                              <select
-                                value={editCourseName}
-                                onChange={(e) => {
-                                  const selectedTitle = e.target.value;
-                                  setEditCourseName(selectedTitle);
-                                  const matched = courses.find((c) => c.title === selectedTitle);
-                                  if (matched) setEditCourseCode(matched.code);
-                                }}
-                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
-                              >
-                                {courses.map((c) => (
-                                  <option key={c.id} value={c.title}>
-                                    {c.code} · {c.title}
-                                  </option>
-                                ))}
-                                {!courses.some((c) => c.title === editCourseName) && (
-                                  <option value={editCourseName}>{editCourseName}</option>
-                                )}
-                              </select>
-                            </div>
+                      <div>
+                        {SCHEDULE_TIME_SLOTS.map((slot) => (
+                          <div
+                            key={slot.start}
+                            className="grid grid-cols-[40px_repeat(5,1fr)] min-h-[38px] border-b border-slate-100 last:border-b-0 items-start"
+                          >
+                            <span className="text-[10px] text-slate-400 font-medium pt-0.5">
+                              {slot.start}
+                            </span>
+                            {SCHEDULE_DAYS.map((day) => {
+                              const itemsInSlot = weekSchedule.filter(
+                                (it) => it.day === day && it.timeRowIndex === slot.row
+                              );
+                              return (
+                                <div
+                                  key={day}
+                                  className="border-l border-slate-200/60 min-h-[38px] p-0.5 flex flex-col gap-0.5"
+                                >
+                                  {itemsInSlot.map((cls) => {
+                                    const isSelected = selectedScheduleId === cls.id;
+                                    return (
+                                      <button
+                                        key={cls.id}
+                                        type="button"
+                                        onClick={() => {
+                                          if (isSelected) {
+                                            setSelectedScheduleId(null);
+                                            setEditingScheduleId(null);
+                                          } else {
+                                            setSelectedScheduleId(cls.id);
+                                            setEditingScheduleId(null);
+                                          }
+                                        }}
+                                        className={`w-full min-h-[44px] rounded-md p-1 text-left border flex flex-col justify-start transition-all cursor-pointer ${getCellColor(
+                                          cls.color
+                                        )} ${
+                                          isSelected
+                                            ? 'ring-2 ring-[#18458b] shadow-sm font-semibold'
+                                            : 'opacity-90 hover:opacity-100'
+                                        }`}
+                                      >
+                                        <span className="text-[9px] font-bold leading-tight truncate">
+                                          {cls.courseCode} · {cls.groupName || 'CS-2401'}
+                                        </span>
+                                        <span className="text-[9px] font-semibold leading-tight break-words">
+                                          {cls.courseName}
+                                        </span>
+                                        <span className="text-[8px] opacity-80 leading-none truncate mt-auto pt-0.5">
+                                          {cls.room}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                                Student Group
-                              </label>
-                              <select
-                                value={editGroupName}
-                                onChange={(e) => setEditGroupName(e.target.value)}
-                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
-                              >
-                                <option value="CS-2401">CS-2401</option>
-                                <option value="SE-2402">SE-2402</option>
-                              </select>
+                    {/* Selected Class Drawer: Details, Edit Form, Map & Delete */}
+                    {selectedCls && (
+                      <div className="p-3 rounded-xl bg-slate-50 border border-blue-200 space-y-2.5 text-xs">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-900">
+                                {selectedCls.day} {selectedCls.startTime} · {selectedCls.courseName}
+                              </span>
+                              <span className="text-[10px] font-semibold bg-white px-1.5 py-0.2 rounded border border-slate-200 text-slate-600">
+                                {selectedCls.groupName || 'CS-2401'}
+                              </span>
                             </div>
+                            <p className="text-[10.5px] text-slate-500 mt-0.5">
+                              {selectedCls.room} ({selectedCls.building})
+                            </p>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                                Day
-                              </label>
-                              <select
-                                value={editDay}
-                                onChange={(e) => setEditDay(e.target.value as ScheduleItem['day'])}
-                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
-                              >
-                                {SCHEDULE_DAYS.map((d) => (
-                                  <option key={d} value={d}>
-                                    {d}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                                Time
-                              </label>
-                              <select
-                                value={editStartTime}
-                                onChange={(e) => setEditStartTime(e.target.value)}
-                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
-                              >
-                                {SCHEDULE_TIME_SLOTS.map((s) => (
-                                  <option key={s.start} value={s.start}>
-                                    {s.start} - {s.end}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                                Classroom
-                              </label>
-                              <select
-                                value={editRoom}
-                                onChange={(e) => setEditRoom(e.target.value)}
-                                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
-                              >
-                                {SCHEDULE_ROOMS.map((r) => (
-                                  <option key={r.room} value={r.room}>
-                                    {r.room}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end gap-1.5 pt-1">
+                          <div className="flex items-center gap-1 shrink-0">
                             <button
                               type="button"
-                              onClick={() => setEditingScheduleId(null)}
-                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600"
+                              onClick={() => {
+                                if (editingScheduleId === selectedCls.id) {
+                                  setEditingScheduleId(null);
+                                } else {
+                                  setEditingScheduleId(selectedCls.id);
+                                  setEditCourseName(selectedCls.courseName);
+                                  setEditCourseCode(selectedCls.courseCode);
+                                  setEditDay(selectedCls.day);
+                                  setEditStartTime(selectedCls.startTime);
+                                  setEditRoom(selectedCls.room);
+                                  setEditGroupName(selectedCls.groupName || 'CS-2401');
+                                  setEditWeekStart(selectedCls.weekStart || 'recurring');
+                                }
+                              }}
+                              className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
                             >
-                              Cancel
+                              <Pencil className="w-3 h-3" />
+                              <span>{editingScheduleId === selectedCls.id ? 'Close' : 'Edit'}</span>
                             </button>
                             <button
-                              type="submit"
-                              className="text-[11px] font-bold px-3 py-1 rounded-lg bg-[#18458b] text-white cursor-pointer"
+                              type="button"
+                              onClick={() => navigateToClassroom(selectedCls.room)}
+                              className="text-[10.5px] font-bold text-[#18458b] bg-white border border-blue-200 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
                             >
-                              Save Schedule Changes
+                              <MapPin className="w-3 h-3 text-blue-600" />
+                              <span>Map</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                removeScheduleItem(selectedCls.id);
+                                setSelectedScheduleId(null);
+                                setEditingScheduleId(null);
+                                setScheduleToast(`Removed "${selectedCls.courseName}"`);
+                                setTimeout(() => setScheduleToast(null), 2500);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                              aria-label="Delete class"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedScheduleId(null);
+                                setEditingScheduleId(null);
+                              }}
+                              className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                              aria-label="Close class details"
+                            >
+                              <X className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                        </form>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                        </div>
+
+                        {editingScheduleId === selectedCls.id && (
+                          <form
+                            onSubmit={async (e) => {
+                              e.preventDefault();
+                              const slot =
+                                SCHEDULE_TIME_SLOTS.find((s) => s.start === editStartTime) ||
+                                SCHEDULE_TIME_SLOTS[1];
+                              const roomObj =
+                                SCHEDULE_ROOMS.find((r) => r.room === editRoom) ||
+                                SCHEDULE_ROOMS[0];
+                              await updateScheduleClass(selectedCls.id, {
+                                courseName: editCourseName.trim() || selectedCls.courseName,
+                                courseCode: editCourseCode.trim() || selectedCls.courseCode,
+                                day: editDay,
+                                startTime: slot.start,
+                                endTime: slot.end,
+                                timeRowIndex: slot.row,
+                                room: roomObj.room,
+                                building: roomObj.building,
+                                groupName: editGroupName,
+                                weekStart: editWeekStart,
+                              });
+                              setEditingScheduleId(null);
+                              setScheduleToast(
+                                `Updated "${editCourseName}" → ${editDay} ${slot.start} (${roomObj.room})`
+                              );
+                              setTimeout(() => setScheduleToast(null), 3000);
+                            }}
+                            className="bg-white border border-blue-200 rounded-xl p-2.5 space-y-2"
+                          >
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                  Subject
+                                </label>
+                                <select
+                                  value={editCourseName}
+                                  onChange={(e) => {
+                                    const selectedTitle = e.target.value;
+                                    setEditCourseName(selectedTitle);
+                                    const matched = teacherCourses.find(
+                                      (c) => c.title === selectedTitle
+                                    );
+                                    if (matched) setEditCourseCode(matched.code);
+                                  }}
+                                  className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                                >
+                                  {teacherCourses.map((c) => (
+                                    <option key={c.id} value={c.title}>
+                                      {c.code} · {c.title}
+                                    </option>
+                                  ))}
+                                  {!teacherCourses.some((c) => c.title === editCourseName) && (
+                                    <option value={editCourseName}>{editCourseName}</option>
+                                  )}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                  Group
+                                </label>
+                                <select
+                                  value={editGroupName}
+                                  onChange={(e) => setEditGroupName(e.target.value)}
+                                  className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                                >
+                                  <option value="CS-2401">CS-2401</option>
+                                  <option value="SE-2402">SE-2402</option>
+                                  <option value="IT-2403">IT-2403</option>
+                                  <option value="ALL">ALL</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                  Repeat
+                                </label>
+                                <select
+                                  value={editWeekStart}
+                                  onChange={(e) => setEditWeekStart(e.target.value)}
+                                  className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                                >
+                                  <option value="recurring">Every Week</option>
+                                  <option value={weekSummary.activeWeekIso}>
+                                    Week {weekSummary.activeWeekIso}
+                                  </option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                  Day
+                                </label>
+                                <select
+                                  value={editDay}
+                                  onChange={(e) =>
+                                    setEditDay(e.target.value as ScheduleItem['day'])
+                                  }
+                                  className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                                >
+                                  {SCHEDULE_DAYS.map((d) => (
+                                    <option key={d} value={d}>
+                                      {d}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                  Time
+                                </label>
+                                <select
+                                  value={editStartTime}
+                                  onChange={(e) => setEditStartTime(e.target.value)}
+                                  className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                                >
+                                  {SCHEDULE_TIME_SLOTS.map((s) => (
+                                    <option key={s.start} value={s.start}>
+                                      {s.start} - {s.end}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                  Room
+                                </label>
+                                <select
+                                  value={editRoom}
+                                  onChange={(e) => setEditRoom(e.target.value)}
+                                  className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50"
+                                >
+                                  {SCHEDULE_ROOMS.map((r) => (
+                                    <option key={r.room} value={r.room}>
+                                      {r.room}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end gap-1.5 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setEditingScheduleId(null)}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="text-[11px] font-bold px-3 py-1 rounded-lg bg-[#18458b] text-white cursor-pointer"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

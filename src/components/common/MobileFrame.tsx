@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { DashboardScreen } from '../dashboard/DashboardScreen';
 import { ScheduleScreen } from '../schedule/ScheduleScreen';
 import { GradesScreen } from '../grades/GradesScreen';
+import { AssignmentsScreen } from '../assignments/AssignmentsScreen';
 import { CampusMapScreen } from '../map/CampusMapScreen';
 import { TeacherDashboard } from '../teacher/TeacherDashboard';
 import { AdminDashboard } from '../admin/AdminDashboard';
@@ -28,8 +29,9 @@ export const MobileFrame: React.FC = () => {
       case 'schedule':
         return <ScheduleScreen />;
       case 'grades':
-      case 'assignments':
         return <GradesScreen />;
+      case 'assignments':
+        return <AssignmentsScreen />;
       case 'map':
         return <CampusMapScreen />;
       default:

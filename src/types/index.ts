@@ -14,6 +14,7 @@ export interface AuthUser {
   group_name?: string | null;
   department?: string | null;
   gpa?: number | null;
+  enrolled_course_ids?: string[];
   created_at?: string;
 }
 
@@ -64,10 +65,12 @@ export type AssessmentCategory = 'assignment' | 'quiz' | 'midterm' | 'final';
 
 export interface ScheduleItem {
   id: string;
+  courseId?: string;
   courseName: string;
   courseCode: string;
   professor: string;
   groupName?: string;
+  weekStart?: string; // ISO Monday date e.g. '2026-10-26' or 'recurring'
   day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
   startTime: string; // e.g. "10:00"
   endTime: string;   // e.g. "11:30"
@@ -81,6 +84,7 @@ export interface ScheduleItem {
 
 export interface AssessmentItem {
   id: string;
+  courseId?: string;
   title: string;
   description?: string;
   category: AssessmentCategory; // 'assignment' | 'quiz' | 'midterm' | 'final'
@@ -103,10 +107,44 @@ export interface Announcement {
   id: string;
   title: string;
   courseCode?: string;
+  room?: string;
   timestamp: string;
+  createdAt?: string;
   description: string;
   unread: boolean;
   type: 'schedule_change' | 'deadline' | 'admin' | 'scholarship';
+}
+
+export interface StudentLifeEvent {
+  id: string;
+  title: string;
+  organizer: string;
+  category: 'hackathon' | 'career' | 'club' | 'lecture';
+  date: string;
+  location: string;
+  room?: string;
+  prizeOrPerks?: string;
+  isSponsored?: boolean;
+  registered?: boolean;
+  description: string;
+}
+
+export interface LmsIntegrationItem {
+  id: 'moodle' | 'platonus' | 'du';
+  name: string;
+  protocol: string;
+  status: 'connected' | 'syncing' | 'error';
+  lastSyncedAt: string;
+  syncedCourses: number;
+  syncedGrades: number;
+  syncedStudents: number;
+}
+
+export interface AIQuotaInfo {
+  usedTokens: number;
+  monthlyQuota: number;
+  queriesCount: number;
+  tier: string;
 }
 
 export interface CampusBuilding {
@@ -151,6 +189,8 @@ export interface OfflineCacheSnapshot {
   assignments: Assignment[];
   courses: CourseRecord[];
   bookings: RoomBooking[];
+  announcements?: Announcement[];
+  studentLifeEvents?: StudentLifeEvent[];
   mapData: {
     buildings: CampusBuilding[];
     classrooms: Record<string, ClassroomLocation>;

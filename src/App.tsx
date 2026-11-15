@@ -5,6 +5,7 @@ import { AllScreensView } from './components/presentation/AllScreensView';
 import { DashboardScreen } from './components/dashboard/DashboardScreen';
 import { ScheduleScreen } from './components/schedule/ScheduleScreen';
 import { GradesScreen } from './components/grades/GradesScreen';
+import { AssignmentsScreen } from './components/assignments/AssignmentsScreen';
 import { CampusMapScreen } from './components/map/CampusMapScreen';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -26,8 +27,6 @@ import {
   Bell,
   GraduationCap,
   CalendarPlus,
-  Briefcase,
-  ShieldCheck,
   LogIn,
   Loader2,
   Download,
@@ -41,7 +40,6 @@ const MainContent: React.FC = () => {
     activeTab,
     userRole,
     currentUser,
-    switchDemoRole,
     setIsAuthModalOpen,
     setIsAIAssistantOpen,
     setIsBookingOpen,
@@ -74,8 +72,9 @@ const MainContent: React.FC = () => {
       case 'schedule':
         return <ScheduleScreen />;
       case 'grades':
-      case 'assignments':
         return <GradesScreen />;
+      case 'assignments':
+        return <AssignmentsScreen />;
       case 'map':
         return <CampusMapScreen />;
       default:
@@ -166,51 +165,8 @@ const MainContent: React.FC = () => {
           </div>
         </div>
 
-        {/* Role Switcher (Student / Teacher / Admin) + View Mode Switcher */}
+        {/* View Mode Switcher (Account switching via Sign In / Register only) */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Student / Teacher / Admin Role Toggle */}
-          <div className="flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
-            <button
-              onClick={() => switchDemoRole('student')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                userRole === 'student'
-                  ? 'bg-[#18458b] text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Switch to Student Role Interface (View-Only Grades & Schedule)"
-            >
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>Student</span>
-            </button>
-
-            <button
-              onClick={() => switchDemoRole('teacher')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                userRole === 'teacher'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Switch to Teacher Role Interface (Modify Schedule & Grade Students)"
-            >
-              <Briefcase className="w-3.5 h-3.5" />
-              <span>Teacher</span>
-            </button>
-
-            <button
-              onClick={() => switchDemoRole('admin')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                userRole === 'admin'
-                  ? 'bg-purple-700 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Switch to Admin Role Interface (Add Subjects, Bind Teachers & Full Access)"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Admin</span>
-            </button>
-          </div>
-
-          {/* View Mode Switcher */}
           <div className="flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
             <button
               onClick={() => setViewMode('phone')}

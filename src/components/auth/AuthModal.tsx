@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { getApiBaseUrl, setCustomApiBaseUrl } from '../../config/apiConfig';
 import type { UserRole } from '../../types';
 import {
   GraduationCap,
@@ -11,12 +10,10 @@ import {
   User,
   Users,
   Building2,
+  BookOpen,
   X,
-  CheckCircle2,
   AlertCircle,
   Loader2,
-  Server,
-  WifiOff,
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -25,28 +22,32 @@ export const AuthModal: React.FC = () => {
     setIsAuthModalOpen,
     loginWithCredentials,
     registerAccount,
-    switchDemoRole,
-    currentUser,
-    userRole,
+    courses,
     isColdStarting,
-    isOfflineMode,
-    setIsOfflineMode,
   } = useApp();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [role, setRole] = useState<UserRole>(userRole);
+  const [role, setRole] = useState<UserRole>('student');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [groupName, setGroupName] = useState('CS-2401');
   const [department, setDepartment] = useState('Department of Computer Science');
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>(() =>
+    courses.slice(0, 3).map((c) => c.id)
+  );
+  const [teacherCourseCode, setTeacherCourseCode] = useState('');
+  const [teacherCourseTitle, setTeacherCourseTitle] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showApiConfig, setShowApiConfig] = useState(false);
-  const [apiUrlInput, setApiUrlInput] = useState(getApiBaseUrl());
-  const [apiSavedMsg, setApiSavedMsg] = useState(false);
 
   if (!isAuthModalOpen) return null;
+
+  const toggleCourseSelection = (courseId: string) => {
+    setSelectedCourseIds((prev) =>
+      prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +63,15 @@ export const AuthModal: React.FC = () => {
           full_name: fullName,
           role,
           group_name: role === 'student' ? groupName : undefined,
-          department: role === 'teacher' ? department : undefined,
+          department: role !== 'student' ? department : undefined,
+          enrolled_course_ids:
+            role === 'student'
+              ? selectedCourseIds.length > 0
+                ? selectedCourseIds
+                : courses.map((c) => c.id)
+              : undefined,
+          course_code: role === 'teacher' && teacherCourseCode.trim() ? teacherCourseCode.trim() : undefined,
+          course_title: role === 'teacher' && teacherCourseTitle.trim() ? teacherCourseTitle.trim() : undefined,
         });
       }
       setIsAuthModalOpen(false);
@@ -71,25 +80,6 @@ export const AuthModal: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoLogin = async (targetRole: UserRole) => {
-    setError(null);
-    setLoading(true);
-    try {
-      await switchDemoRole(targetRole);
-      setIsAuthModalOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Demo login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveApiUrl = () => {
-    setCustomApiBaseUrl(apiUrlInput);
-    setApiSavedMsg(true);
-    setTimeout(() => setApiSavedMsg(false), 2000);
   };
 
   return (
@@ -113,9 +103,9 @@ export const AuthModal: React.FC = () => {
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-base font-bold tracking-tight">UniCampus Portal</h3>
+              <h3 className="text-base font-bold tracking-tight">UniCampus Account</h3>
               <p className="text-[11px] text-blue-100/90">
-                Role-Based Cloud Access (Student & Teacher RBAC)
+                Sign In or Create Student / Teacher / Admin Account
               </p>
             </div>
           </div>
@@ -139,6 +129,9 @@ export const AuthModal: React.FC = () => {
               onClick={() => {
                 setMode('register');
                 setError(null);
+                if (selectedCourseIds.length === 0 && courses.length > 0) {
+                  setSelectedCourseIds(courses.map((c) => c.id));
+                }
               }}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
                 mode === 'register' ? 'bg-white text-[#18458b] shadow-xs' : 'text-blue-100 hover:text-white'
@@ -151,90 +144,17 @@ export const AuthModal: React.FC = () => {
 
         {/* Body */}
         <div className="p-5 overflow-y-auto space-y-4 text-slate-800">
-          {/* Render Cold-Start Warning Banner */}
           {isColdStarting && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 flex items-start gap-2">
               <Loader2 className="w-4 h-4 text-amber-600 animate-spin shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold">Waking up Render PostgreSQL Cloud Server...</p>
+                <p className="font-bold">Waking up Cloud Database Server...</p>
                 <p className="text-[11px] text-amber-700 mt-0.5">
-                  Render Free Tier instances may take up to 30–60 seconds to spin up on the first request. Please wait...
+                  Server cold start may take a few seconds on first request. Please wait...
                 </p>
               </div>
             </div>
           )}
-
-          {/* Quick Demo Role Switcher (Student / Teacher / Admin) */}
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Instant Test Accounts (1-Click)
-              </span>
-              {currentUser && (
-                <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                  Active: {currentUser.role.toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleDemoLogin('student')}
-                className={`flex flex-col items-start gap-1 p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                  userRole === 'student'
-                    ? 'bg-blue-50/90 border-[#18458b] text-[#18458b] ring-1 ring-[#18458b]/20'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="w-7 h-7 rounded-lg bg-[#18458b] text-white flex items-center justify-center shrink-0">
-                  <GraduationCap className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0 w-full">
-                  <div className="text-[11px] font-bold truncate">Student</div>
-                  <div className="text-[9.5px] text-slate-500 truncate">student123</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleDemoLogin('teacher')}
-                className={`flex flex-col items-start gap-1 p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                  userRole === 'teacher'
-                    ? 'bg-emerald-50/90 border-emerald-600 text-emerald-900 ring-1 ring-emerald-600/20'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                  <Briefcase className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0 w-full">
-                  <div className="text-[11px] font-bold truncate">Teacher</div>
-                  <div className="text-[9.5px] text-slate-500 truncate">teacher123</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleDemoLogin('admin')}
-                className={`flex flex-col items-start gap-1 p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                  userRole === 'admin'
-                    ? 'bg-purple-50/90 border-purple-700 text-purple-900 ring-1 ring-purple-700/20'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="w-7 h-7 rounded-lg bg-purple-700 text-white flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0 w-full">
-                  <div className="text-[11px] font-bold truncate">Admin</div>
-                  <div className="text-[9.5px] text-slate-500 truncate">admin123</div>
-                </div>
-              </button>
-            </div>
-          </div>
 
           {error && (
             <div className="bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-xs text-rose-700 flex items-center gap-2">
@@ -245,7 +165,6 @@ export const AuthModal: React.FC = () => {
 
           {/* Main Login / Registration Form */}
           <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Role Selector during Registration */}
             {mode === 'register' && (
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
@@ -304,7 +223,13 @@ export const AuthModal: React.FC = () => {
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder={role === 'student' ? 'e.g. Sanzhar Akhmetov' : 'e.g. Prof. Aidar K.'}
+                    placeholder={
+                      role === 'student'
+                        ? 'e.g. Sanzhar Akhmetov'
+                        : role === 'teacher'
+                          ? 'e.g. Prof. Nurlan K.'
+                          : 'e.g. Admin Saltanat M.'
+                    }
                     className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#18458b]/20"
                   />
                 </div>
@@ -322,7 +247,7 @@ export const AuthModal: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student@astanait.edu.kz or teacher@astanait.edu.kz"
+                  placeholder="student@unicampus.kz or teacher@unicampus.kz"
                   className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#18458b]/20"
                 />
               </div>
@@ -339,35 +264,64 @@ export const AuthModal: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="•••••••• (Demo: password123)"
+                  placeholder="Enter password"
                   className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#18458b]/20"
                 />
               </div>
             </div>
 
             {mode === 'register' && role === 'student' && (
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Student Group
-                </label>
-                <div className="relative">
-                  <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <select
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 bg-slate-50/70 focus:bg-white focus:outline-none"
-                  >
-                    <option value="CS-2401">CS-2401 (Computer Science)</option>
-                    <option value="SE-2402">SE-2402 (Software Engineering)</option>
-                  </select>
+              <>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Student Group
+                  </label>
+                  <div className="relative">
+                    <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <select
+                      value={groupName}
+                      onChange={(e) => setGroupName(e.target.value)}
+                      className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 bg-slate-50/70 focus:bg-white focus:outline-none"
+                    >
+                      <option value="CS-2401">CS-2401 (Computer Science)</option>
+                      <option value="SE-2402">SE-2402 (Software Engineering)</option>
+                      <option value="IT-2403">IT-2403 (Information Technology)</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+                    <BookOpen className="w-3.5 h-3.5 text-[#18458b]" />
+                    <span>Enrolled Subjects ({selectedCourseIds.length})</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {courses.map((course) => {
+                      const active = selectedCourseIds.includes(course.id);
+                      return (
+                        <button
+                          key={course.id}
+                          type="button"
+                          onClick={() => toggleCourseSelection(course.id)}
+                          className={`text-[10.5px] font-bold px-2.5 py-1 rounded-lg border transition-colors ${
+                            active
+                              ? 'bg-blue-50 text-[#18458b] border-blue-300'
+                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                          }`}
+                        >
+                          {course.code}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
             )}
 
-            {mode === 'register' && role === 'teacher' && (
+            {mode === 'register' && (role === 'teacher' || role === 'admin') && (
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Academic Department
+                  {role === 'admin' ? 'Administrative Unit' : 'Academic Department'}
                 </label>
                 <div className="relative">
                   <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -382,6 +336,35 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
 
+            {mode === 'register' && role === 'teacher' && (
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                    Subject Code (opt)
+                  </label>
+                  <input
+                    type="text"
+                    value={teacherCourseCode}
+                    onChange={(e) => setTeacherCourseCode(e.target.value)}
+                    placeholder="e.g. AI201"
+                    className="w-full text-xs border border-slate-200 rounded-xl px-2.5 py-2 bg-slate-50/70 focus:bg-white focus:outline-none"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                    Subject Title (opt)
+                  </label>
+                  <input
+                    type="text"
+                    value={teacherCourseTitle}
+                    onChange={(e) => setTeacherCourseTitle(e.target.value)}
+                    placeholder="e.g. Applied Machine Learning"
+                    className="w-full text-xs border border-slate-200 rounded-xl px-2.5 py-2 bg-slate-50/70 focus:bg-white focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -391,77 +374,12 @@ export const AuthModal: React.FC = () => {
               <span>
                 {mode === 'login'
                   ? 'Sign In to UniCampus'
-                  : `Register as ${role === 'teacher' ? 'Teacher' : 'Student'}`}
+                  : `Register as ${
+                      role === 'admin' ? 'Administrator' : role === 'teacher' ? 'Teacher' : 'Student'
+                    }`}
               </span>
             </button>
           </form>
-
-          {/* Offline Mode & Server Endpoint Settings for APK / Render */}
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <button
-              type="button"
-              onClick={() => {
-                setIsOfflineMode(!isOfflineMode);
-                if (!isOfflineMode) setIsAuthModalOpen(false);
-              }}
-              className={`flex items-center gap-1 font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
-                isOfflineMode
-                  ? 'bg-amber-50 text-amber-800 border-amber-200'
-                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              <WifiOff className="w-3.5 h-3.5" />
-              <span>{isOfflineMode ? 'Offline Mode: ON' : 'Use Offline Mode'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowApiConfig(!showApiConfig)}
-              className="flex items-center gap-1 text-slate-500 hover:text-[#18458b] font-semibold"
-            >
-              <Server className="w-3.5 h-3.5" />
-              <span>Render API Config</span>
-            </button>
-          </div>
-
-          {showApiConfig && (
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2 text-xs">
-              <div className="font-bold text-slate-700 flex items-center justify-between">
-                <span>Backend Server URL (Render / Local)</span>
-                {apiSavedMsg && (
-                  <span className="text-emerald-600 flex items-center gap-1 text-[10px]">
-                    <CheckCircle2 className="w-3 h-3" /> Saved
-                  </span>
-                )}
-              </div>
-              <input
-                type="url"
-                value={apiUrlInput}
-                onChange={(e) => setApiUrlInput(e.target.value)}
-                placeholder="https://unicampus-api.onrender.com/api"
-                className="w-full text-[11px] border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white font-mono"
-              />
-              <div className="flex justify-end gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCustomApiBaseUrl(null);
-                    setApiUrlInput(getApiBaseUrl());
-                  }}
-                  className="text-[10px] px-2 py-1 rounded bg-slate-200 text-slate-700 font-semibold"
-                >
-                  Reset Default
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveApiUrl}
-                  className="text-[10px] px-2.5 py-1 rounded bg-[#18458b] text-white font-semibold"
-                >
-                  Save Endpoint
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

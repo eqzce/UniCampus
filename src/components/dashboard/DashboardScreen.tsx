@@ -1,8 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Header } from '../common/Header';
-import { FloatingActionButton } from '../common/FloatingActionButton';
 import { useApp } from '../../context/AppContext';
-import { RECENT_ANNOUNCEMENTS } from '../../data/mockData';
 import {
   MapPin,
   ArrowRight,
@@ -11,7 +9,9 @@ import {
   UserCheck,
   Download,
   CheckCircle2,
-  Eye,
+  Trophy,
+  Briefcase,
+  Calendar,
 } from 'lucide-react';
 
 export const DashboardScreen: React.FC = () => {
@@ -19,6 +19,7 @@ export const DashboardScreen: React.FC = () => {
     navigateToClassroom,
     setActiveTab,
     setIsAIAssistantOpen,
+    setIsNotificationsOpen,
     isOfflineMode,
     saveAllForOffline,
     scheduleItems,
@@ -26,6 +27,10 @@ export const DashboardScreen: React.FC = () => {
     student,
     attendance,
     grades,
+    announcements,
+    markAnnouncementRead,
+    studentLifeEvents,
+    toggleEventRegistration,
   } = useApp();
 
   const [offlineSavedBanner, setOfflineSavedBanner] = useState(false);
@@ -95,8 +100,8 @@ export const DashboardScreen: React.FC = () => {
             ></span>
             <span>
               {isOfflineMode
-                ? 'Offline Mode (Schedule, Map & Grades Saved)'
-                : 'Synced with University Portal'}
+                ? 'Offline Mode'
+                : 'Synced'}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -135,7 +140,7 @@ export const DashboardScreen: React.FC = () => {
           >
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Dynamic GPA
+                GPA
               </span>
               <span className="text-base font-black text-slate-900">
                 {student.gpa.toFixed(2)}
@@ -169,17 +174,13 @@ export const DashboardScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* 1. Today's Schedule Card (Read-Only for Student) */}
+        {/* 1. Today's Schedule Card */}
         <div className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <h3 className="text-[15px] font-bold text-slate-800">
-                Today's Schedule
+                Schedule
               </h3>
-              <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Eye className="w-2.5 h-2.5" />
-                <span>View Only</span>
-              </span>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -250,7 +251,7 @@ export const DashboardScreen: React.FC = () => {
         <div className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[15px] font-bold text-slate-800">
-              Upcoming Deadlines
+              Deadlines
             </h3>
             <button
               onClick={() => setActiveTab('assignments')}
@@ -282,23 +283,38 @@ export const DashboardScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* 3. Recent Announcements Card */}
+        {/* 3. Live Recent Announcements Card */}
         <div className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[15px] font-bold text-slate-800">
-              Recent Announcements
+              Alerts
             </h3>
+            <button
+              onClick={() => setIsNotificationsOpen(true)}
+              className="text-xs text-[#18458b] font-semibold flex items-center gap-0.5 hover:underline cursor-pointer"
+            >
+              <span>All Alerts</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
 
           <div className="space-y-2">
-            {RECENT_ANNOUNCEMENTS.map((announcement) => (
+            {announcements.slice(0, 4).map((announcement) => (
               <div
                 key={announcement.id}
-                className="flex items-start gap-2.5 text-xs py-1.5 text-slate-700"
+                onClick={() => {
+                  if (announcement.unread) markAnnouncementRead(announcement.id, false);
+                  if (announcement.room) navigateToClassroom(announcement.room);
+                }}
+                className="flex items-start gap-2.5 text-xs py-1.5 text-slate-700 cursor-pointer hover:bg-slate-50/70 rounded-lg px-1 transition-colors"
               >
-                <span className="w-2 h-2 rounded-full bg-slate-400 mt-1.5 flex-shrink-0"></span>
-                <div>
-                  <p className="font-medium">{announcement.title}</p>
+                <span
+                  className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                    announcement.unread ? 'bg-[#18458b]' : 'bg-slate-300'
+                  }`}
+                ></span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-800 truncate">{announcement.title}</p>
                   <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
                     {announcement.description}
                   </p>
@@ -308,10 +324,85 @@ export const DashboardScreen: React.FC = () => {
           </div>
         </div>
 
-      </div>
+        {/* 4. Student Life & Career / Hackathon Events Feed */}
+        <div className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5">
+              <Trophy className="w-4 h-4 text-amber-500" />
+              <h3 className="text-[15px] font-bold text-slate-800">
+                Events
+              </h3>
+            </div>
+            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+              {studentLifeEvents.length} Events
+            </span>
+          </div>
 
-      {/* Floating Action Button (+) */}
-      <FloatingActionButton />
+          <div className="space-y-2.5">
+            {studentLifeEvents.map((evt) => (
+              <div
+                key={evt.id}
+                className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[9.5px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-[#18458b] border border-blue-200">
+                        {evt.category}
+                      </span>
+                      {evt.isSponsored && (
+                        <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-0.5">
+                          <Briefcase className="w-2.5 h-2.5" />
+                          Partner
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-900 mt-1">{evt.title}</h4>
+                    <p className="text-[10.5px] text-slate-500 font-medium">
+                      {evt.organizer} · {evt.location}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[10.5px] text-slate-600">
+                  <span className="flex items-center gap-1 font-semibold">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    {evt.date}
+                  </span>
+                  {evt.prizeOrPerks && (
+                    <span className="font-bold text-emerald-700 truncate max-w-[140px]">
+                      {evt.prizeOrPerks}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => toggleEventRegistration(evt.id)}
+                    className={`flex-1 py-1.5 px-2.5 rounded-xl text-[11px] font-bold transition-colors cursor-pointer ${
+                      evt.registered
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'bg-[#18458b] text-white hover:bg-blue-900'
+                    }`}
+                  >
+                    {evt.registered ? 'Registered ✓' : 'RSVP / Join'}
+                  </button>
+                  {evt.room && (
+                    <button
+                      onClick={() => navigateToClassroom(evt.room!)}
+                      className="py-1.5 px-2.5 rounded-xl text-[11px] font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center gap-1 cursor-pointer"
+                    >
+                      <MapPin className="w-3 h-3 text-[#18458b]" />
+                      Map
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 };

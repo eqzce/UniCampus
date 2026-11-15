@@ -1,17 +1,63 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DoorClosed, X, CheckCircle2 } from 'lucide-react';
 
+const STANDARD_ROOMS = [
+  'Study Room A',
+  'Study Room B',
+  'C1.1.320',
+  'C1.2.136',
+  'C1.3.246',
+  'C1.1.140',
+  'C1.3.125',
+  'C1.3.328',
+];
+
 export const RoomBookingModal: React.FC = () => {
-  const { isBookingOpen, setIsBookingOpen, createRoomBooking, roomBookings } = useApp();
+  const {
+    isBookingOpen,
+    setIsBookingOpen,
+    preselectedBookingRoom,
+    setPreselectedBookingRoom,
+    createRoomBooking,
+    roomBookings,
+  } = useApp();
   const [selectedBuilding, setSelectedBuilding] = useState('AITU Main Library');
   const [selectedRoom, setSelectedRoom] = useState('Study Room B');
   const [timeSlot, setTimeSlot] = useState('14:00 - 16:00');
-  const [date, setDate] = useState('2026-10-28');
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [purpose, setPurpose] = useState('Group study session for CS101');
   const [isBooked, setIsBooked] = useState(false);
 
+  useEffect(() => {
+    if (!isBookingOpen || !preselectedBookingRoom) return;
+    setSelectedRoom(preselectedBookingRoom.roomNumber);
+    if (preselectedBookingRoom.buildingName) {
+      setSelectedBuilding(preselectedBookingRoom.buildingName);
+    } else if (preselectedBookingRoom.roomNumber.startsWith('C1.1')) {
+      setSelectedBuilding('AITU Block C1.1');
+    } else if (preselectedBookingRoom.roomNumber.startsWith('C1.2')) {
+      setSelectedBuilding('AITU Block C1.2');
+    } else if (preselectedBookingRoom.roomNumber.startsWith('C1.3')) {
+      setSelectedBuilding('AITU Block C1.3');
+    }
+    setPurpose(`Study / lab reservation for ${preselectedBookingRoom.roomNumber}`);
+  }, [isBookingOpen, preselectedBookingRoom]);
+
+  const roomOptions = useMemo(() => {
+    const base = [...STANDARD_ROOMS];
+    if (selectedRoom && !base.includes(selectedRoom)) {
+      base.unshift(selectedRoom);
+    }
+    return base;
+  }, [selectedRoom]);
+
   if (!isBookingOpen) return null;
+
+  const closeModal = () => {
+    setPreselectedBookingRoom(null);
+    setIsBookingOpen(false);
+  };
 
   const handleBook = async () => {
     await createRoomBooking({
@@ -24,7 +70,7 @@ export const RoomBookingModal: React.FC = () => {
     setIsBooked(true);
     setTimeout(() => {
       setIsBooked(false);
-      setIsBookingOpen(false);
+      closeModal();
     }, 1500);
   };
 
@@ -44,8 +90,9 @@ export const RoomBookingModal: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => setIsBookingOpen(false)}
+            onClick={closeModal}
             className="text-slate-400 hover:text-slate-600 p-1"
+            aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
@@ -71,6 +118,7 @@ export const RoomBookingModal: React.FC = () => {
                 className="w-full text-xs border border-slate-200 rounded-xl p-2.5 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#18458b]/20"
               >
                 <option value="AITU Main Library">AITU Main Library</option>
+                <option value="AITU Main Campus (C1)">AITU Main Campus (C1)</option>
                 <option value="AITU Block C1.1">AITU Block C1.1</option>
                 <option value="AITU Block C1.2">AITU Block C1.2</option>
                 <option value="AITU Block C1.3">AITU Block C1.3</option>
@@ -86,11 +134,11 @@ export const RoomBookingModal: React.FC = () => {
                 onChange={(e) => setSelectedRoom(e.target.value)}
                 className="w-full text-xs border border-slate-200 rounded-xl p-2.5 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#18458b]/20"
               >
-                <option value="Study Room A">Study Room A (Cap. 6)</option>
-                <option value="Study Room B">Study Room B (Cap. 8)</option>
-                <option value="C1.1.320">C1.1.320 - Physics Lab</option>
-                <option value="C1.2.136">C1.2.136 - Computer Hall</option>
-                <option value="C1.3.246">C1.3.246 - Seminar Room</option>
+                {roomOptions.map((room) => (
+                  <option key={room} value={room}>
+                    {room}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -170,7 +218,7 @@ export const RoomBookingModal: React.FC = () => {
 
             <div className="pt-2 flex gap-2">
               <button
-                onClick={() => setIsBookingOpen(false)}
+                onClick={closeModal}
                 className="flex-1 text-xs font-semibold py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
               >
                 Cancel

@@ -21,10 +21,10 @@ export const TeacherBottomNav: React.FC<TeacherBottomNavProps> = ({ forcedTab, o
   };
 
   const navItems: { id: TeacherTabType; label: string; icon: React.FC<{ className?: string }> }[] = [
-    { id: 'gradebook', label: 'Gradebook', icon: BookOpenCheck },
+    { id: 'gradebook', label: 'Grades', icon: BookOpenCheck },
     { id: 'attendance', label: 'Attendance', icon: UserCheck },
     { id: 'tasks', label: 'Tasks', icon: CalendarPlus },
-    { id: 'schedule', label: 'Rooms & Sched', icon: DoorOpen },
+    { id: 'schedule', label: 'Schedule', icon: DoorOpen },
     { id: 'map', label: 'Map', icon: MapPin },
   ];
 

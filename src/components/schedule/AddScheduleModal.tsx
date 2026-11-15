@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { validateCampusRoom, VALID_CAMPUS_ROOMS } from '../map/buildings';
+import { formatShortMonthDay, getWeekSummaryInfo } from '../../utils/dateUtils';
 import type { ScheduleItem } from '../../types';
 import {
   X,
@@ -41,27 +42,60 @@ const COLORS: { id: ScheduleItem['color']; label: string; dot: string }[] = [
   { id: 'yellow', label: 'Yellow', dot: 'bg-yellow-500' },
 ];
 
-const DUE_OPTIONS: { label: string; dueDate: string; daysLeft: number }[] = [
+const getDueOptions = (): { label: string; dueDate: string; daysLeft: number }[] => [
   { label: 'Today', dueDate: 'Today', daysLeft: 0 },
   { label: 'Tomorrow', dueDate: 'Tomorrow', daysLeft: 1 },
-  { label: 'In 3 Days', dueDate: 'Oct 29', daysLeft: 3 },
-  { label: 'In 1 Week', dueDate: 'Nov 02', daysLeft: 7 },
+  { label: 'In 3 Days', dueDate: formatShortMonthDay(3), daysLeft: 3 },
+  { label: 'In 1 Week', dueDate: formatShortMonthDay(7), daysLeft: 7 },
 ];
 
 export const AddScheduleModal: React.FC = () => {
-  const { isAddScheduleOpen, setIsAddScheduleOpen, addScheduleItem, setActiveTab } = useApp();
+  const {
+    isAddScheduleOpen,
+    setIsAddScheduleOpen,
+    addScheduleItem,
+    setActiveTab,
+    courses,
+    selectedWeekOffset,
+    currentUser,
+  } = useApp();
+
+  const dueOptions = useMemo(() => getDueOptions(), []);
+  const availableCourses = useMemo(() => {
+    if (currentUser?.role === 'teacher') {
+      const owned = courses.filter((c) => c.teacher_id === currentUser.id);
+      return owned.length > 0 ? owned : courses;
+    }
+    if (currentUser?.role === 'student' && currentUser.enrolled_course_ids?.length) {
+      return courses.filter((c) => currentUser.enrolled_course_ids?.includes(c.id));
+    }
+    return courses;
+  }, [courses, currentUser]);
 
   const [courseName, setCourseName] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState<string | undefined>(undefined);
+  const [selectedCourseCode, setSelectedCourseCode] = useState<string>('');
   const [roomInput, setRoomInput] = useState('');
   const [homeworkTitle, setHomeworkTitle] = useState('');
   const [dueOptionIndex, setDueOptionIndex] = useState(1);
   const [professor, setProfessor] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState<string>(
+    currentUser?.group_name && ['CS-2401', 'SE-2402', 'IT-2403'].includes(currentUser.group_name)
+      ? currentUser.group_name
+      : 'CS-2401'
+  );
   const [selectedDay, setSelectedDay] = useState<ScheduleItem['day']>('Mon');
   const [timeRowIndex, setTimeRowIndex] = useState<number>(1);
   const [selectedColor, setSelectedColor] = useState<ScheduleItem['color']>('blue');
+  const [scheduleScope, setScheduleScope] = useState<'recurring' | 'week'>('recurring');
 
   const [courseError, setCourseError] = useState<string | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
+
+  const activeWeekIso = useMemo(
+    () => getWeekSummaryInfo(selectedWeekOffset).activeWeekIso,
+    [selectedWeekOffset]
+  );
 
   const liveRoomValidation = useMemo(() => {
     if (!roomInput.trim()) return null;
@@ -104,19 +138,22 @@ export const AddScheduleModal: React.FC = () => {
     }
 
     const slot = TIME_SLOTS[timeRowIndex] || TIME_SLOTS[1];
-    const dueOpt = DUE_OPTIONS[dueOptionIndex] || DUE_OPTIONS[1];
+    const dueOpt = dueOptions[dueOptionIndex] || dueOptions[1];
     const generatedCode =
+      selectedCourseCode ||
       courseName
         .trim()
         .replace(/[^a-zA-Z0-9]/g, '')
         .toUpperCase()
-        .slice(0, 6) || 'CRS101';
+        .slice(0, 6) ||
+      'CRS101';
 
     addScheduleItem(
       {
+        courseId: selectedCourseId,
         courseName: courseName.trim(),
         courseCode: generatedCode,
-        professor: professor.trim() || 'Course Instructor',
+        professor: professor.trim() || currentUser?.full_name || 'Course Instructor',
         day: selectedDay,
         startTime: slot.startTime,
         endTime: slot.endTime,
@@ -124,6 +161,11 @@ export const AddScheduleModal: React.FC = () => {
         durationHours: 1,
         room: validation.canonicalRoom,
         building: validation.buildingName || 'AITU Main Campus',
+        groupName:
+          currentUser?.role === 'teacher' || currentUser?.role === 'admin'
+            ? selectedGroup
+            : currentUser?.group_name || 'CS-2401',
+        weekStart: scheduleScope === 'week' ? activeWeekIso : 'recurring',
         color: selectedColor,
       },
       homeworkTitle.trim()
@@ -137,6 +179,8 @@ export const AddScheduleModal: React.FC = () => {
 
     // Reset form & switch to Schedule tab so user sees their added class immediately
     setCourseName('');
+    setSelectedCourseId(undefined);
+    setSelectedCourseCode('');
     setRoomInput('');
     setHomeworkTitle('');
     setProfessor('');
@@ -178,11 +222,37 @@ export const AddScheduleModal: React.FC = () => {
             <label className="block text-xs font-bold text-slate-700 mb-1">
               1. Course Name <span className="text-rose-500">*</span>
             </label>
+            {availableCourses.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap mb-1.5">
+                {availableCourses.map((c) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() => {
+                      setCourseName(c.title);
+                      setSelectedCourseId(c.id);
+                      setSelectedCourseCode(c.code);
+                      if (c.teacher_name) setProfessor(c.teacher_name);
+                      if (courseError) setCourseError(null);
+                    }}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition-colors ${
+                      selectedCourseCode === c.code
+                        ? 'bg-[#18458b] text-white border-[#18458b]'
+                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-blue-50'
+                    }`}
+                  >
+                    {c.code}
+                  </button>
+                ))}
+              </div>
+            )}
             <input
               type="text"
               value={courseName}
               onChange={(e) => {
                 setCourseName(e.target.value);
+                setSelectedCourseId(undefined);
+                setSelectedCourseCode('');
                 if (courseError) setCourseError(null);
               }}
               placeholder="e.g. Databases, Linear Algebra, Algorithms..."
@@ -291,7 +361,7 @@ export const AddScheduleModal: React.FC = () => {
                   Due Date:
                 </span>
                 <div className="flex items-center gap-1 flex-wrap">
-                  {DUE_OPTIONS.map((opt, idx) => (
+                  {dueOptions.map((opt, idx) => (
                     <button
                       type="button"
                       key={opt.label}
@@ -347,7 +417,24 @@ export const AddScheduleModal: React.FC = () => {
             </div>
           </div>
 
-          {/* 5. Professor & Card Color */}
+          {/* 5. Professor, Group & Card Color */}
+          {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                Student Group
+              </label>
+              <select
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="w-full text-xs rounded-xl px-2.5 py-2 border border-slate-200 bg-slate-50/70 focus:bg-white focus:outline-none"
+              >
+                <option value="CS-2401">CS-2401</option>
+                <option value="SE-2402">SE-2402</option>
+                <option value="IT-2403">IT-2403</option>
+              </select>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -381,6 +468,37 @@ export const AddScheduleModal: React.FC = () => {
                   />
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* 6. Week Scope */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+              Schedule Repeat
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setScheduleScope('recurring')}
+                className={`text-[11px] font-semibold px-2.5 py-2 rounded-xl border transition-colors cursor-pointer ${
+                  scheduleScope === 'recurring'
+                    ? 'bg-[#18458b] text-white border-[#18458b]'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                Every Week (Recurring)
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleScope('week')}
+                className={`text-[11px] font-semibold px-2.5 py-2 rounded-xl border transition-colors cursor-pointer ${
+                  scheduleScope === 'week'
+                    ? 'bg-[#18458b] text-white border-[#18458b]'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                Week {activeWeekIso} Only
+              </button>
             </div>
           </div>
 

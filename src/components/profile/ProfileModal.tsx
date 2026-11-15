@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   X,
@@ -19,13 +19,18 @@ export const ProfileModal: React.FC = () => {
     student,
     userRole,
     currentUser,
-    switchDemoRole,
     setIsAuthModalOpen,
+    isOfflineMode,
+    setIsOfflineMode,
+    saveAllForOffline,
   } = useApp();
+
+  const [offlineSavedNotice, setOfflineSavedNotice] = useState(false);
 
   if (!isProfileOpen) return null;
 
   const isTeacher = userRole === 'teacher';
+  const isAdmin = userRole === 'admin';
   const initials = (currentUser?.full_name || student.fullName)
     .split(' ')
     .map((n) => n[0])
@@ -49,13 +54,19 @@ export const ProfileModal: React.FC = () => {
             <X className="w-4 h-4 stroke-[2.5]" />
           </button>
           <div className="flex items-center gap-2">
-            {isTeacher ? (
+            {isAdmin ? (
+              <ShieldCheck className="w-5 h-5 text-purple-200" />
+            ) : isTeacher ? (
               <Briefcase className="w-5 h-5 text-emerald-300" />
             ) : (
               <GraduationCap className="w-5 h-5 text-sky-200" />
             )}
             <span className="text-xs font-semibold tracking-wider uppercase text-sky-100">
-              {isTeacher ? 'Faculty Teacher Profile' : 'Student Profile'}
+              {isAdmin
+                ? 'Administrator Profile'
+                : isTeacher
+                  ? 'Faculty Teacher Profile'
+                  : 'Student Profile'}
             </span>
           </div>
           <p className="text-[11px] text-sky-200/90 mt-0.5">{student.university}</p>
@@ -74,7 +85,14 @@ export const ProfileModal: React.FC = () => {
               <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></span>
             </div>
 
-            {isTeacher ? (
+            {isAdmin ? (
+              <div className="bg-purple-50 border border-purple-200 rounded-2xl px-3.5 py-2 text-right shadow-2xs">
+                <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">
+                  Role Access
+                </div>
+                <div className="text-sm font-black text-purple-950">ADMIN</div>
+              </div>
+            ) : isTeacher ? (
               <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-3.5 py-2 text-right shadow-2xs">
                 <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
                   Role Access
@@ -104,12 +122,18 @@ export const ProfileModal: React.FC = () => {
               {currentUser?.full_name || student.fullName}
             </h3>
             <p className="text-xs font-semibold text-blue-700 mt-0.5">
-              {isTeacher
-                ? currentUser?.department || 'Department of Physics & Intelligent Systems'
-                : `${student.major} · Group ${student.groupName || 'CS-2401'}`}
+              {isAdmin
+                ? currentUser?.department || 'University Academic Affairs & Registry'
+                : isTeacher
+                  ? currentUser?.department || 'Department of Physics'
+                  : `${student.major} · Group ${student.groupName || 'CS-2401'}`}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {isTeacher ? 'Astana IT University Faculty' : `${student.academicYear} · ${student.faculty}`}
+              {isAdmin
+                ? 'Astana IT University Administration'
+                : isTeacher
+                  ? 'Astana IT University Faculty'
+                  : `${student.academicYear} · ${student.faculty}`}
             </p>
           </div>
 
@@ -118,10 +142,10 @@ export const ProfileModal: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-slate-500 flex items-center gap-1.5">
                 <IdCard className="w-3.5 h-3.5 text-slate-400" />
-                {isTeacher ? 'Faculty ID' : 'Student ID'}
+                {isAdmin ? 'Admin ID' : isTeacher ? 'Faculty ID' : 'Student ID'}
               </span>
               <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded-md border border-slate-200/70 text-[11px]">
-                {isTeacher ? 'FAC-2024-0104' : student.studentId}
+                {isAdmin ? 'ADM-2026-0001' : isTeacher ? 'FAC-2024-0104' : student.studentId}
               </span>
             </div>
 
@@ -138,10 +162,14 @@ export const ProfileModal: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-slate-500 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                {isTeacher ? 'Permissions' : 'Status'}
+                {isAdmin || isTeacher ? 'Permissions' : 'Scholarship'}
               </span>
-              <span className="font-semibold text-emerald-700 text-[11px]">
-                {isTeacher ? 'Gradebook & Attendance Admin' : student.scholarshipStatus}
+              <span className="font-semibold text-emerald-700 text-[11px] text-right max-w-[190px]">
+                {isAdmin
+                  ? 'Full Campus & RBAC Management'
+                  : isTeacher
+                    ? 'Gradebook, Homework & Schedule'
+                    : student.scholarshipStatus}
               </span>
             </div>
 
@@ -156,55 +184,51 @@ export const ProfileModal: React.FC = () => {
             </div>
           </div>
 
-          {/* 3-Way Role Switcher (Student / Teacher / Admin) & Auth Portal Buttons */}
-          <div className="space-y-2 mb-3">
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                onClick={() => {
-                  switchDemoRole('student');
-                  setIsProfileOpen(false);
-                }}
-                className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 px-2 rounded-xl border transition-colors cursor-pointer ${
-                  userRole === 'student'
-                    ? 'bg-[#18458b] text-white border-[#18458b]'
-                    : 'bg-blue-50 hover:bg-blue-100 text-[#18458b] border-blue-200'
+          {/* Settings: Online / Offline Mode & Cache Sync */}
+          <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                Settings
+              </span>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  isOfflineMode
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-emerald-100 text-emerald-800'
                 }`}
               >
-                <GraduationCap className="w-3.5 h-3.5" />
-                <span>Student</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  switchDemoRole('teacher');
-                  setIsProfileOpen(false);
-                }}
-                className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 px-2 rounded-xl border transition-colors cursor-pointer ${
-                  userRole === 'teacher'
-                    ? 'bg-emerald-600 text-white border-emerald-600'
-                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
-                }`}
-              >
-                <Briefcase className="w-3.5 h-3.5" />
-                <span>Teacher</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  switchDemoRole('admin');
-                  setIsProfileOpen(false);
-                }}
-                className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 px-2 rounded-xl border transition-colors cursor-pointer ${
-                  userRole === 'admin'
-                    ? 'bg-purple-700 text-white border-purple-700'
-                    : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border-purple-200'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Admin</span>
-              </button>
+                {isOfflineMode ? 'Offline Mode' : 'Online Mode'}
+              </span>
             </div>
 
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsOfflineMode(!isOfflineMode)}
+                className={`flex-1 text-xs font-bold py-2 px-3 rounded-xl border transition-colors cursor-pointer ${
+                  isOfflineMode
+                    ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                    : 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                }`}
+              >
+                {isOfflineMode ? 'Offline: ON' : 'Online: ON'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  saveAllForOffline();
+                  setOfflineSavedNotice(true);
+                  setTimeout(() => setOfflineSavedNotice(false), 2200);
+                }}
+                className="text-xs font-bold py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-[#18458b] border border-blue-200 transition-colors cursor-pointer"
+              >
+                {offlineSavedNotice ? 'Saved!' : 'Save Offline'}
+              </button>
+            </div>
+          </div>
+
+          {/* Account Authentication Button (Role switching via real sign-in/registration only) */}
+          <div className="space-y-2">
             <button
               onClick={() => {
                 setIsProfileOpen(false);
@@ -215,15 +239,14 @@ export const ProfileModal: React.FC = () => {
               <LogIn className="w-3.5 h-3.5" />
               <span>Sign In / Switch Account</span>
             </button>
-          </div>
 
-          {/* Done Button */}
-          <button
-            onClick={() => setIsProfileOpen(false)}
-            className="w-full bg-[#18458b] hover:bg-[#14366d] active:scale-98 text-white font-semibold text-xs py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
-          >
-            Close Profile
-          </button>
+            <button
+              onClick={() => setIsProfileOpen(false)}
+              className="w-full bg-[#18458b] hover:bg-[#14366d] active:scale-98 text-white font-semibold text-xs py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              Close Profile
+            </button>
+          </div>
         </div>
       </div>
     </div>

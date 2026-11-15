@@ -22,8 +22,8 @@ export const AdminBottomNav: React.FC<AdminBottomNavProps> = ({ forcedTab }) => 
     { id: 'courses', label: 'Subjects', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'schedule', label: 'Schedule', icon: <CalendarClock className="w-4 h-4" /> },
     { id: 'gradebook', label: 'Grades', icon: <GraduationCap className="w-4 h-4" /> },
-    { id: 'attendance', label: 'Attend.', icon: <UserCheck className="w-4 h-4" /> },
-    { id: 'tasks', label: 'Deadlines', icon: <ClipboardList className="w-4 h-4" /> },
+    { id: 'attendance', label: 'Attendance', icon: <UserCheck className="w-4 h-4" /> },
+    { id: 'tasks', label: 'Tasks', icon: <ClipboardList className="w-4 h-4" /> },
     { id: 'map', label: 'Map', icon: <MapPin className="w-4 h-4" /> },
   ];
 

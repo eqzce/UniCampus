@@ -1,7 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
-import { Search, Plus, Minus, X, ChevronDown, Check, Building2, MapPin } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Minus,
+  X,
+  ChevronDown,
+  Check,
+  Building2,
+  MapPin,
+  DoorClosed,
+} from 'lucide-react';
 import { Header } from '../common/Header';
 import { useApp } from '../../context/AppContext';
 import { CLASSROOM_LOCATIONS } from '../../data/mockData';
@@ -11,8 +21,25 @@ import type { CampusBuildingMap, ParsedRoom } from './buildings';
 const SEARCH_CLASS = 'room-map-group-search-target';
 const SELECTED_CLASS = 'room-map-group-selected';
 
+function findMatchingSvgElement(root: HTMLElement | null, roomId?: string | null): SVGGElement | null {
+  if (!root || !roomId) return null;
+  const selId = roomId.toUpperCase();
+  const nodes = root.querySelectorAll<SVGGElement>('[data-name]');
+  for (const el of Array.from(nodes)) {
+    const name = (el.getAttribute('data-name') || '').toUpperCase();
+    const parts = name.split('|').map((s) => s.trim());
+    if (
+      parts.includes(selId) ||
+      parts.some((p) => p === selId || p.replace(/[PKL]$/, '') === selId.replace(/[PKL]$/, ''))
+    ) {
+      return el;
+    }
+  }
+  return null;
+}
+
 export const CampusMapScreen: React.FC = () => {
-  const { selectedRoomForNav, roomNavTimestamp } = useApp();
+  const { selectedRoomForNav, roomNavTimestamp, openRoomBookingFor } = useApp();
 
   const initialRoom = useMemo(() => {
     if (!selectedRoomForNav) return null;
@@ -29,6 +56,7 @@ export const CampusMapScreen: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<ReactZoomPanPinchRef>(null);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
+  const shouldAutoZoomRef = useRef<boolean>(Boolean(initialRoom));
 
   const building = BUILDING_MAPS.find((b) => b.id === buildingId)!;
   const floorNumbers = useMemo(
@@ -37,7 +65,7 @@ export const CampusMapScreen: React.FC = () => {
   );
   const FloorPlan: React.FC | undefined = building.floors[floor];
 
-  // "Show on Map" from Schedule / Dashboard -> open that room
+  // "Show on Map" from Schedule / Dashboard / AI Advisor -> open & auto-zoom to highlight that room
   useEffect(() => {
     if (!selectedRoomForNav) return;
     const roomId = CLASSROOM_LOCATIONS[selectedRoomForNav]?.roomNumber ?? selectedRoomForNav;
@@ -45,39 +73,72 @@ export const CampusMapScreen: React.FC = () => {
     setBuildingId('main');
     setQuery(parsed.id);
     setSelectedRoom(parsed);
+    shouldAutoZoomRef.current = true;
     if (parsed.floor) {
       setFloor(parsed.floor);
     }
-    setTimeout(() => {
-      zoomRef.current?.resetTransform();
-    }, 60);
   }, [selectedRoomForNav, roomNavTimestamp]);
 
-  // Typing a room number jumps to its floor
+  // Typing a room number jumps to its floor and highlights matching room
   const handleQueryChange = (value: string) => {
     setQuery(value);
-    setSelectedRoom(null);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setSelectedRoom(null);
+      return;
+    }
     const f = floorFromQuery(value);
     if (f && building.floors[f]) setFloor(f);
+    if (trimmed.length >= 3) {
+      const parsed = parseRoom(trimmed);
+      setSelectedRoom(parsed);
+      shouldAutoZoomRef.current = true;
+    } else {
+      setSelectedRoom(null);
+    }
   };
 
-  // Apply search / selection highlight to the SVG after each render of the floor
+  // Apply search / selection highlight and smoothly auto-zoom to the room
   useEffect(() => {
     const root = mapRef.current;
     if (!root) return;
     const q = query.trim().toUpperCase();
     const selId = selectedRoom?.id.toUpperCase();
+    let matchedEl: SVGGElement | null = null;
+
     root.querySelectorAll<SVGGElement>('[data-name]').forEach((el) => {
       const name = (el.getAttribute('data-name') || '').toUpperCase();
       const parts = name.split('|').map((s) => s.trim());
       const matchesSearch = q.length > 0 && parts.some((p) => p.includes(q));
-      const matchesSelected = !!selId && (
-        parts.includes(selId) ||
-        parts.some((p) => p === selId || p.replace(/[PKL]$/, '') === selId.replace(/[PKL]$/, ''))
-      );
+      const matchesSelected =
+        !!selId &&
+        (parts.includes(selId) ||
+          parts.some((p) => p === selId || p.replace(/[PKL]$/, '') === selId.replace(/[PKL]$/, '')));
       el.classList.toggle(SEARCH_CLASS, matchesSearch);
       el.classList.toggle(SELECTED_CLASS, matchesSelected);
+      if (matchesSelected && !matchedEl) {
+        matchedEl = el;
+      }
     });
+
+    if (!matchedEl && selId) {
+      matchedEl = findMatchingSvgElement(root, selId);
+    }
+
+    if (matchedEl && shouldAutoZoomRef.current) {
+      shouldAutoZoomRef.current = false;
+      setTimeout(() => {
+        try {
+          if (zoomRef.current?.zoomToElement) {
+            zoomRef.current.zoomToElement(matchedEl as unknown as HTMLElement, 1.8, 300);
+          } else {
+            zoomRef.current?.resetTransform();
+          }
+        } catch {
+          zoomRef.current?.resetTransform();
+        }
+      }, 60);
+    }
   }, [query, selectedRoom, floor, buildingId]);
 
   const handleMapClick = (e: React.MouseEvent) => {
@@ -92,6 +153,7 @@ export const CampusMapScreen: React.FC = () => {
       return;
     }
     const parsed = parseRoom(target.getAttribute('data-name') || '');
+    shouldAutoZoomRef.current = true;
     setSelectedRoom({ ...parsed, floor: parsed.floor ?? floor });
   };
 
@@ -212,7 +274,7 @@ export const CampusMapScreen: React.FC = () => {
                   boxSizing: 'content-box',
                 }}
               >
-                <div className="w-[920px] max-w-none flex items-center justify-center p-2">
+                <div className="w-[920px] max-w-none flex items-center justify-center p-2 relative">
                   <FloorPlan />
                 </div>
               </TransformComponent>
@@ -266,16 +328,21 @@ export const CampusMapScreen: React.FC = () => {
           </div>
         )}
 
-        {/* Selected room card */}
+        {/* Selected room card with indoor route & room booking actions */}
         {selectedRoom && FloorPlan && (
-          <div className="absolute bottom-4 left-3.5 right-16 z-30 bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-lg border border-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <div className="absolute bottom-3 left-3 right-14 z-30 bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-lg border border-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-150">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
                   <MapPin className="w-4 h-4 text-amber-500" />
                 </div>
-                <div>
-                  <h5 className="text-sm font-bold text-slate-900 leading-tight">{selectedRoom.label}</h5>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h5 className="text-sm font-bold text-slate-900 leading-tight">{selectedRoom.label}</h5>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full">
+                      Highlighted on Map
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     {building.name}
                     {selectedRoom.block && ` · Block ${selectedRoom.block}`}
@@ -284,11 +351,28 @@ export const CampusMapScreen: React.FC = () => {
                 </div>
               </div>
               <button
-                onClick={() => setSelectedRoom(null)}
-                className="text-slate-400 hover:text-slate-600 p-0.5"
+                onClick={() => {
+                  setSelectedRoom(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-0.5 flex-shrink-0"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-2.5 flex items-center gap-2">
+              <button
+                onClick={() =>
+                  openRoomBookingFor(
+                    selectedRoom.id,
+                    selectedRoom.block ? `AITU Block ${selectedRoom.block}` : building.name
+                  )
+                }
+                className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-bold py-2 px-2.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
+              >
+                <DoorClosed className="w-3.5 h-3.5" />
+                <span>Book Room</span>
               </button>
             </div>
           </div>

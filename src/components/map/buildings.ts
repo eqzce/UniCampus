@@ -106,8 +106,12 @@ export const VALID_CAMPUS_ROOMS: string[] = [
 const ROOM_ALIASES: Record<string, string> = {
   '320': 'C1.1.320',
   'ROOM 320': 'C1.1.320',
+  '301': 'C1.1.320',
+  'ROOM 301': 'C1.1.320',
   '136': 'C1.2.136',
   'ROOM 136': 'C1.2.136',
+  '105': 'C1.2.136',
+  'ROOM 105': 'C1.2.136',
   '246': 'C1.3.246',
   'ROOM 246': 'C1.3.246',
   '140': 'C1.1.140',
@@ -205,7 +209,8 @@ export function getBuildingNameForRoom(room: string): string {
  * Named rooms ("DININGHALL|...") only keep their first alias as label.
  */
 export function parseRoom(dataName: string): ParsedRoom {
-  const id = dataName.split('|')[0];
+  const raw = dataName.split('|')[0];
+  const id = ROOM_ALIASES[raw.trim().toUpperCase()] ?? raw;
   const m = id.match(/^(C\d\.\d)\.(\d)/i);
   if (m) {
     return { id, label: id.toUpperCase(), block: m[1].toUpperCase(), floor: Number(m[2]) };

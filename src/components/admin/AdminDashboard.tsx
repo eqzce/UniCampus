@@ -3,7 +3,7 @@ import { Header } from '../common/Header';
 import { useApp } from '../../context/AppContext';
 import { TeacherDashboard } from '../teacher/TeacherDashboard';
 import { CampusMapScreen } from '../map/CampusMapScreen';
-import type { AdminTabType } from '../../types';
+import type { AdminTabType, StudentLifeEvent } from '../../types';
 import {
   BookOpen,
   UserPlus,
@@ -17,6 +17,10 @@ import {
   Award,
   UserCheck,
   ClipboardList,
+  RefreshCw,
+  BarChart3,
+  Trophy,
+  Cpu,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -32,11 +36,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ forcedTab }) => 
     teachersList,
     studentsList,
     scheduleItems,
+    roomBookings,
+    lmsIntegrations,
+    syncLmsProvider,
+    aiQuota,
+    studentLifeEvents,
+    createStudentLifeEvent,
     createSubject,
     updateSubject,
     deleteSubject,
     createTeacherAccount,
-    switchDemoRole,
   } = useApp();
 
   const activeTab = forcedTab || adminActiveTab;
@@ -55,6 +64,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ forcedTab }) => 
   const [newTeacherName, setNewTeacherName] = useState('');
   const [newTeacherEmail, setNewTeacherEmail] = useState('');
   const [newTeacherDept, setNewTeacherDept] = useState('Department of Computer Science');
+
+  // Publish Student Life Event State
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventOrganizer, setEventOrganizer] = useState('');
+  const [eventCategory, setEventCategory] = useState<StudentLifeEvent['category']>('hackathon');
+  const [eventDate, setEventDate] = useState('Nov 20, 14:00');
+  const [eventRoom, setEventRoom] = useState('ATRIUM');
+  const [eventPerks, setEventPerks] = useState('');
 
   if (activeTab === 'map') {
     return <CampusMapScreen />;
@@ -117,11 +134,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ forcedTab }) => 
     showToast(`Added teacher "${created.full_name}" — now available to bind to subjects!`);
   };
 
+  const handlePublishEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventTitle.trim()) return;
+    await createStudentLifeEvent({
+      title: eventTitle.trim(),
+      organizer: eventOrganizer.trim() || 'AITU Career & Clubs',
+      category: eventCategory,
+      date: eventDate.trim() || 'Upcoming',
+      location: eventRoom ? `AITU ${eventRoom}` : 'AITU Main Atrium',
+      room: eventRoom.trim() || 'ATRIUM',
+      prizeOrPerks: eventPerks.trim() || undefined,
+      isSponsored: eventCategory === 'career' || eventCategory === 'hackathon',
+      description: `Published by ${currentUser?.full_name || 'Admin'} for AITU students.`,
+    });
+    showToast(`Published event "${eventTitle.trim()}" to Student Life Feed`);
+    setEventTitle('');
+    setEventOrganizer('');
+    setEventPerks('');
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#f4f6fa] relative overflow-hidden select-none">
       <Header
-        title="ADMIN PORTAL"
-        subtitle={`${currentUser?.full_name || 'Aidar K.'} · University Registry & RBAC`}
+        title="ADMIN"
       />
 
       <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3 pb-20">
@@ -131,20 +167,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ forcedTab }) => 
             <ShieldCheck className="w-4 h-4 text-purple-700 shrink-0" />
             <span className="truncate">Full Admin Control (Subjects, Teachers, Schedule & Grades)</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => switchDemoRole('teacher')}
-              className="text-[10px] font-bold text-emerald-800 bg-white hover:bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 cursor-pointer"
-            >
-              Teacher →
-            </button>
-            <button
-              onClick={() => switchDemoRole('student')}
-              className="text-[10px] font-bold text-[#18458b] bg-white hover:bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 cursor-pointer"
-            >
-              Student →
-            </button>
-          </div>
+          <span className="text-[10px] font-bold text-purple-800 bg-white px-2 py-0.5 rounded-lg border border-purple-200 shrink-0">
+            {studentsList.length} Students · {courses.length} Courses · {teachersList.length} Teachers
+          </span>
         </div>
 
         {/* Admin Quick Stats & All-Features Shortcuts */}
@@ -424,6 +449,208 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ forcedTab }) => 
             })}
           </div>
         </div>
+
+        {/* ================================================================= */}
+        {/* 3. UNIVERSITY LMS / ERP MIDDLEWARE SYNC (MOODLE / PLATONUS / DU)  */}
+        {/* ================================================================= */}
+        <div className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#18458b] flex items-center justify-center">
+                <RefreshCw className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900">
+                  LMS Middleware Sync (Moodle / Platonus / DU)
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  REST API Bridge for AITU Registry & Academic Records
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await syncLmsProvider('all');
+                showToast('Synced Moodle, Platonus & Digital University feeds');
+              }}
+              className="text-[10.5px] font-bold bg-[#18458b] text-white px-2.5 py-1.5 rounded-lg hover:bg-blue-900 transition-colors cursor-pointer"
+            >
+              Sync All LMS
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {lmsIntegrations.map((lms) => (
+              <div
+                key={lms.id}
+                className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-slate-900">{lms.name}</span>
+                    <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 capitalize">
+                      {lms.status}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                    {lms.protocol} · {lms.syncedCourses} courses · {lms.syncedGrades} grades · {lms.syncedStudents} students
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await syncLmsProvider(lms.id);
+                    showToast(`Synchronized ${lms.name} successfully`);
+                  }}
+                  className="text-[10.5px] font-bold text-[#18458b] bg-white border border-blue-200 hover:bg-blue-50 px-2.5 py-1 rounded-lg shrink-0 cursor-pointer"
+                >
+                  Sync {lms.id.toUpperCase()}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ================================================================= */}
+        {/* 4. B2B SAAS & AI TOKEN QUOTA ANALYTICS                            */}
+        {/* ================================================================= */}
+        <div className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                <BarChart3 className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900">
+                  B2B SaaS & AI Token Analytics
+                </h3>
+                <p className="text-[10px] text-slate-400">{aiQuota.tier}</p>
+              </div>
+            </div>
+            <Cpu className="w-4 h-4 text-indigo-600" />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+              <div className="text-sm font-black text-slate-900">
+                {studentsList.length + teachersList.length}
+              </div>
+              <div className="text-[9.5px] font-semibold text-slate-500">Licensed Seats</div>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+              <div className="text-sm font-black text-[#18458b]">{aiQuota.queriesCount}</div>
+              <div className="text-[9.5px] font-semibold text-slate-500">AI Queries</div>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+              <div className="text-sm font-black text-amber-600">
+                {roomBookings.filter((b) => b.status === 'pending').length}
+              </div>
+              <div className="text-[9.5px] font-semibold text-slate-500">Pending Rooms</div>
+            </div>
+          </div>
+
+          <div className="bg-indigo-50/70 rounded-xl p-2.5 border border-indigo-100 text-[11px]">
+            <div className="flex items-center justify-between font-bold text-indigo-950 mb-1">
+              <span>Monthly AI LLM Token Consumption</span>
+              <span>
+                {aiQuota.usedTokens.toLocaleString()} / {aiQuota.monthlyQuota.toLocaleString()}
+              </span>
+            </div>
+            <div className="w-full h-2 bg-white rounded-full overflow-hidden border border-indigo-100">
+              <div
+                className="h-full bg-indigo-600 rounded-full"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    Math.max(4, Math.round((aiQuota.usedTokens / Math.max(1, aiQuota.monthlyQuota)) * 100))
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ================================================================= */}
+        {/* 5. PUBLISH STUDENT LIFE / CAREER EVENT                            */}
+        {/* ================================================================= */}
+        <form
+          onSubmit={handlePublishEvent}
+          className="bg-white rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 space-y-2.5"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Trophy className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900">
+                  Publish Student Life / Career Event
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  Live in Student Dashboard ({studentLifeEvents.length} active events)
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              placeholder="Event Title (e.g. AITU AI Fair)"
+              value={eventTitle}
+              onChange={(e) => setEventTitle(e.target.value)}
+              className="col-span-2 text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50"
+            />
+            <input
+              type="text"
+              placeholder="Organizer / Partner"
+              value={eventOrganizer}
+              onChange={(e) => setEventOrganizer(e.target.value)}
+              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50"
+            />
+            <select
+              value={eventCategory}
+              onChange={(e) => setEventCategory(e.target.value as StudentLifeEvent['category'])}
+              className="text-xs border border-slate-200 rounded-xl px-2.5 py-2 bg-slate-50"
+            >
+              <option value="hackathon">Hackathon</option>
+              <option value="career">Career Fair</option>
+              <option value="club">Club Event</option>
+              <option value="lecture">Guest Lecture</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Date & Time"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50"
+            />
+            <input
+              type="text"
+              placeholder="Map Room (e.g. C1.2.136)"
+              value={eventRoom}
+              onChange={(e) => setEventRoom(e.target.value)}
+              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50"
+            />
+            <input
+              type="text"
+              placeholder="Prize / Perks (optional)"
+              value={eventPerks}
+              onChange={(e) => setEventPerks(e.target.value)}
+              className="col-span-2 text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={!eventTitle.trim()}
+            className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Publish Campus Event</span>
+          </button>
+        </form>
       </div>
     </div>
   );

@@ -13,6 +13,8 @@ import {
   STORAGE_KEY_AUTH_USER,
 } from '../config/apiConfig';
 import type {
+  AIQuotaInfo,
+  Announcement,
   AssessmentCategory,
   Assignment,
   AttendanceRecord,
@@ -20,8 +22,10 @@ import type {
   AuthUser,
   CourseRecord,
   GradeRecord,
+  LmsIntegrationItem,
   RoomBooking,
   ScheduleItem,
+  StudentLifeEvent,
   UserRole,
 } from '../types';
 
@@ -117,10 +121,12 @@ async function fetchWithColdStartTimeout<T>(
 export function mapDbScheduleItem(raw: Record<string, unknown>): ScheduleItem {
   return {
     id: String(raw.id),
+    courseId: raw.course_id || raw.courseId ? String(raw.course_id || raw.courseId) : undefined,
     courseName: String(raw.courseName || raw.course_name || 'Course'),
     courseCode: String(raw.courseCode || raw.course_code || 'CRS101'),
     professor: String(raw.professor || 'Dr. Yersultan M.'),
     groupName: String(raw.groupName || raw.group_name || 'CS-2401'),
+    weekStart: String(raw.weekStart || raw.week_start || 'recurring'),
     day: (raw.day as ScheduleItem['day']) || 'Mon',
     startTime: String(raw.startTime || raw.start_time || '10:00'),
     endTime: String(raw.endTime || raw.end_time || '11:00'),
@@ -140,9 +146,16 @@ export function mapDbAssignment(raw: Record<string, unknown>, grades: GradeRecor
   const matchedGrade = grades.find(
     (g) => g.course_code === courseCode && g.category.toLowerCase().includes(String(raw.category || 'assignment').toLowerCase())
   );
+  const noteText =
+    raw.personal_note !== undefined && raw.personal_note !== null
+      ? String(raw.personal_note)
+      : raw.personalNote !== undefined && raw.personalNote !== null
+        ? String(raw.personalNote)
+        : '';
 
   return {
     id: String(raw.id),
+    courseId: raw.course_id || raw.courseId ? String(raw.course_id || raw.courseId) : undefined,
     title: String(raw.title || 'Task'),
     description: String(raw.description || ''),
     category: (raw.category as AssessmentCategory) || 'assignment',
@@ -155,8 +168,69 @@ export function mapDbAssignment(raw: Record<string, unknown>, grades: GradeRecor
     status: matchedGrade ? 'graded' : ((raw.status as Assignment['status']) || 'todo'),
     weight: String(raw.weight || '10%'),
     grade: matchedGrade ? `${matchedGrade.score}/100` : (raw.grade as string | undefined),
-    hasPersonalNote: Boolean(raw.description),
-    personalNote: raw.description ? String(raw.description) : undefined,
+    hasPersonalNote: Boolean(noteText.trim()),
+    personalNote: noteText.trim() ? noteText : undefined,
+  };
+}
+
+export function mapDbAnnouncement(raw: Record<string, unknown>): Announcement {
+  return {
+    id: String(raw.id),
+    title: String(raw.title || 'Campus Notice'),
+    courseCode: raw.course_code || raw.courseCode ? String(raw.course_code || raw.courseCode) : undefined,
+    room: raw.room ? String(raw.room) : undefined,
+    timestamp: String(raw.timestamp || 'Just now'),
+    createdAt: raw.created_at || raw.createdAt ? String(raw.created_at || raw.createdAt) : undefined,
+    description: String(raw.description || ''),
+    unread: Boolean(raw.unread),
+    type: (['schedule_change', 'deadline', 'admin', 'scholarship'].includes(String(raw.type))
+      ? raw.type
+      : 'admin') as Announcement['type'],
+  };
+}
+
+export function mapDbStudentLifeEvent(raw: Record<string, unknown>): StudentLifeEvent {
+  const rawCategory = String(raw.category || 'club');
+  const category = (['hackathon', 'career', 'club', 'lecture'].includes(rawCategory)
+    ? rawCategory
+    : 'lecture') as StudentLifeEvent['category'];
+  return {
+    id: String(raw.id),
+    title: String(raw.title || 'Campus Event'),
+    organizer: String(raw.organizer || 'AITU Student Hub'),
+    category,
+    date: String(raw.date || 'Upcoming'),
+    location: String(raw.location || 'AITU Atrium'),
+    room: raw.room ? String(raw.room) : undefined,
+    prizeOrPerks:
+      raw.prize_or_perks || raw.prizeOrPerks
+        ? String(raw.prize_or_perks || raw.prizeOrPerks)
+        : undefined,
+    isSponsored: Boolean(raw.is_sponsored ?? raw.isSponsored),
+    registered: Boolean(raw.registered),
+    description: String(raw.description || ''),
+  };
+}
+
+export function mapDbLmsIntegration(raw: Record<string, unknown>): LmsIntegrationItem {
+  return {
+    id: (raw.id as LmsIntegrationItem['id']) || 'moodle',
+    name: String(raw.name || 'Moodle LMS'),
+    protocol: String(raw.protocol || 'REST API'),
+    status: (raw.status as LmsIntegrationItem['status']) || 'connected',
+    lastSyncedAt: String(raw.last_synced_at || raw.lastSyncedAt || new Date().toISOString()),
+    syncedCourses: Number(raw.synced_courses ?? raw.syncedCourses ?? 0),
+    syncedGrades: Number(raw.synced_grades ?? raw.syncedGrades ?? 0),
+    syncedStudents: Number(raw.synced_students ?? raw.syncedStudents ?? 0),
+  };
+}
+
+export function mapDbAiQuota(raw?: Record<string, unknown> | null): AIQuotaInfo {
+  return {
+    usedTokens: Number(raw?.used_tokens ?? raw?.usedTokens ?? 1420),
+    monthlyQuota: Number(raw?.monthly_quota ?? raw?.monthlyQuota ?? 10000),
+    queriesCount: Number(raw?.queries_count ?? raw?.queriesCount ?? 14),
+    tier: String(raw?.tier || 'B2B Institutional Metered Tier'),
   };
 }
 
@@ -168,7 +242,7 @@ export function mapDbBooking(raw: Record<string, unknown>): RoomBooking {
     userRole: (raw.user_role as UserRole) || 'student',
     roomNumber: String(raw.room_number || raw.roomNumber || 'Study Room B'),
     buildingName: String(raw.building_name || raw.buildingName || 'Main Library'),
-    date: String(raw.date || '2026-10-28'),
+    date: String(raw.date || new Date().toISOString().slice(0, 10)),
     timeSlot: String(raw.time_slot || raw.timeSlot || '14:00 - 16:00'),
     purpose: String(raw.purpose || 'Study session'),
     status: (raw.status as RoomBooking['status']) || 'pending',
@@ -193,6 +267,9 @@ export const ApiService = {
     role: UserRole;
     group_name?: string;
     department?: string;
+    enrolled_course_ids?: string[];
+    course_code?: string;
+    course_title?: string;
   }): Promise<{ token: string; user: AuthUser }> {
     const res = await fetchWithColdStartTimeout<{ token: string; user: AuthUser }>('/auth/register', {
       method: 'POST',
@@ -214,6 +291,10 @@ export const ApiService = {
       assignments: Record<string, unknown>[];
       schedule: Record<string, unknown>[];
       bookings: Record<string, unknown>[];
+      announcements?: Record<string, unknown>[];
+      studentLifeEvents?: Record<string, unknown>[];
+      lmsIntegrations?: Record<string, unknown>[];
+      aiQuota?: Record<string, unknown>;
       syncedAt: string;
     }>('/bootstrap');
 
@@ -228,6 +309,10 @@ export const ApiService = {
       assignments: (data.assignments || []).map((a) => mapDbAssignment(a, data.grades || [])),
       schedule: (data.schedule || []).map(mapDbScheduleItem),
       bookings: (data.bookings || []).map(mapDbBooking),
+      announcements: (data.announcements || []).map(mapDbAnnouncement),
+      studentLifeEvents: (data.studentLifeEvents || []).map(mapDbStudentLifeEvent),
+      lmsIntegrations: (data.lmsIntegrations || []).map(mapDbLmsIntegration),
+      aiQuota: mapDbAiQuota(data.aiQuota),
       syncedAt: data.syncedAt,
     };
   },
@@ -325,6 +410,31 @@ export const ApiService = {
     });
   },
 
+  async updateAssignment(
+    id: string,
+    payload: {
+      status?: 'todo' | 'submitted' | 'graded';
+      personal_note?: string;
+      description?: string;
+      title?: string;
+      due_date?: string;
+      grade?: string;
+      category?: AssessmentCategory;
+      weight?: string;
+      group_name?: string;
+      course_id?: string;
+    }
+  ): Promise<Assignment> {
+    const res = await fetchWithColdStartTimeout<{ assignment: Record<string, unknown> }>(
+      `/assignments/${id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
+    return mapDbAssignment(res.assignment);
+  },
+
   async createScheduleItem(payload: Omit<ScheduleItem, 'id'>): Promise<ScheduleItem> {
     const res = await fetchWithColdStartTimeout<{ scheduleItem: Record<string, unknown> }>(
       '/schedule',
@@ -334,6 +444,20 @@ export const ApiService = {
       }
     );
     return mapDbScheduleItem(res.scheduleItem);
+  },
+
+  async importScheduleItems(
+    items: Array<Omit<ScheduleItem, 'id'>>,
+    replaceWeekStart?: string
+  ): Promise<ScheduleItem[]> {
+    const res = await fetchWithColdStartTimeout<{ scheduleItems: Record<string, unknown>[] }>(
+      '/schedule/import',
+      {
+        method: 'POST',
+        body: JSON.stringify({ items, replaceWeekStart }),
+      }
+    );
+    return (res.scheduleItems || []).map(mapDbScheduleItem);
   },
 
   async updateScheduleItem(id: string, payload: Partial<Omit<ScheduleItem, 'id'>>): Promise<ScheduleItem> {
@@ -378,5 +502,125 @@ export const ApiService = {
       }
     );
     return mapDbBooking(res.booking);
+  },
+
+  async getAnnouncements(): Promise<Announcement[]> {
+    const res = await fetchWithColdStartTimeout<{ announcements: Record<string, unknown>[] }>('/announcements');
+    return (res.announcements || []).map(mapDbAnnouncement);
+  },
+
+  async createAnnouncement(payload: {
+    title: string;
+    description: string;
+    course_code?: string;
+    room?: string;
+    type?: Announcement['type'];
+  }): Promise<Announcement> {
+    const res = await fetchWithColdStartTimeout<{ announcement: Record<string, unknown> }>('/announcements', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return mapDbAnnouncement(res.announcement);
+  },
+
+  async markAnnouncementRead(id: string, unread = false): Promise<Announcement> {
+    const res = await fetchWithColdStartTimeout<{ announcement: Record<string, unknown> }>(
+      `/announcements/${id}/read`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ unread }),
+      }
+    );
+    return mapDbAnnouncement(res.announcement);
+  },
+
+  async markAllAnnouncementsRead(): Promise<Announcement[]> {
+    const res = await fetchWithColdStartTimeout<{ announcements: Record<string, unknown>[] }>(
+      '/announcements/read-all',
+      { method: 'POST' }
+    );
+    return (res.announcements || []).map(mapDbAnnouncement);
+  },
+
+  async getStudentLifeEvents(): Promise<StudentLifeEvent[]> {
+    const res = await fetchWithColdStartTimeout<{ events: Record<string, unknown>[] }>('/student-life');
+    return (res.events || []).map(mapDbStudentLifeEvent);
+  },
+
+  async createStudentLifeEvent(payload: {
+    title: string;
+    organizer: string;
+    category: StudentLifeEvent['category'];
+    date: string;
+    location: string;
+    room?: string;
+    prize_or_perks?: string;
+    is_sponsored?: boolean;
+    description: string;
+  }): Promise<StudentLifeEvent> {
+    const res = await fetchWithColdStartTimeout<{ event: Record<string, unknown> }>('/student-life', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return mapDbStudentLifeEvent(res.event);
+  },
+
+  async toggleStudentLifeRegistration(id: string): Promise<StudentLifeEvent> {
+    const res = await fetchWithColdStartTimeout<{ event: Record<string, unknown> }>(
+      `/student-life/${id}/toggle-register`,
+      { method: 'POST' }
+    );
+    return mapDbStudentLifeEvent(res.event);
+  },
+
+  async getIntegrations(): Promise<LmsIntegrationItem[]> {
+    const res = await fetchWithColdStartTimeout<{ integrations: Record<string, unknown>[] }>('/integrations');
+    return (res.integrations || []).map(mapDbLmsIntegration);
+  },
+
+  async syncIntegration(provider: string = 'all'): Promise<LmsIntegrationItem[]> {
+    const res = await fetchWithColdStartTimeout<{ integrations: Record<string, unknown>[] }>(
+      '/integrations/sync',
+      {
+        method: 'POST',
+        body: JSON.stringify({ provider }),
+      }
+    );
+    return (res.integrations || []).map(mapDbLmsIntegration);
+  },
+
+  async getAIQuota(): Promise<AIQuotaInfo> {
+    const res = await fetchWithColdStartTimeout<{ quota: Record<string, unknown> }>('/ai/quota');
+    return mapDbAiQuota(res.quota);
+  },
+
+  async askAIAdvisor(payload: {
+    prompt: string;
+    userId?: string;
+    groupName?: string;
+  }): Promise<{
+    reply: string;
+    recommendedRoom: string | null;
+    recommendedTab: string | null;
+    provider: string;
+    quota: AIQuotaInfo;
+  }> {
+    const res = await fetchWithColdStartTimeout<{
+      reply: string;
+      recommendedRoom: string | null;
+      recommendedTab: string | null;
+      provider: string;
+      quota: Record<string, unknown>;
+    }>('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return {
+      reply: res.reply,
+      recommendedRoom: res.recommendedRoom || null,
+      recommendedTab: res.recommendedTab || null,
+      provider: res.provider || 'unicampus-contextual-engine',
+      quota: mapDbAiQuota(res.quota),
+    };
   },
 };
